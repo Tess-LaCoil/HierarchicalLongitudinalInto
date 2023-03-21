@@ -1,0 +1,444 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+
+Load libraries:
+```{r}
+library(rstan)
+library(rstantools)
+library(tidyverse)
+library(vioplot)
+library(ggbeeswarm)
+library(parallel)
+library(latex2exp)
+library(grid)
+```
+
+First, we will generate the simulated data required for demonstrations with both single and multiple individuals, using three different growth functions (constant, exponential, and Canham), then data with a constant growth function to explore sample size effects.
+
+All data simulated for the paper is provided in the output/data/ directory. Saving over these files will slightly change the analysis as there is random generation involved.
+
+
+First we set the file locations for output and initialise data structures.
+```{r}
+rstan_data_locations <- list(
+  single_species_data = "output/data/SingleSpecies_RStan",
+  single_individual_data = "output/data/SingleInd_RStan"
+)
+
+data_build_models <- list(
+  canham_model = list(
+    model_spec = "R/CanhamSpec.r",
+    model_name = "Canham",
+    model_file = "Canham"
+  ),
+  
+  const_model = list(
+    model_spec = "R/ConstSpec.r",
+    model_name = "Constant",
+    model_file = "Const"
+  ),
+  
+  exp_model = list(
+    model_spec = "R/ExponentialSpec.r",
+    model_name = "Exponential",
+    model_file = "Exp"
+  )
+)
+  
+sim_pars <- list(N_ind = 100, #Parameters controlling simulation
+                 S0_mean = 1.5,
+                 S0_sd = 1,
+                 step_size = 0.1,
+                 N_obs = 5, #Observations per individual
+                 census_interval = 5)
+
+sim_pars$time <- seq(from=0, to=(sim_pars$N_obs*sim_pars$census_interval -1), 
+                     by=sim_pars$census_interval)
+
+#Control list to be passed to data construction
+data_construction_controls <- list(
+  data_build_models = data_build_models,
+  
+  sim_pars = sim_pars,
+  
+  build_data_single_individual = TRUE,
+  
+  #Specify where data is to be saved and loaded from.
+  rstan_data_locations = rstan_data_locations
+)
+
+#Change to TRUE to generate data
+build_datasets <- TRUE
+```
+
+We are ready to build the first multi-species data sets. These are produced with error added, in a later section we will look at observations without error to investigate integration methods.
+```{r}
+if(build_datasets){
+  source("R/BuildData.r", local=TRUE)
+  
+  build_data(data_construction_controls)
+}
+```
+
+Now we are going to build data sets for the different sample sizes using the constant growth model. Building the largest dataset (10,000 individuals) can take a few minutes.
+```{r}
+data_build_models_sample_size <- list(
+  const_model = list(
+    model_spec = "R/ConstSpec.r",
+    model_name = "Constant",
+    model_file = "Const"
+  )
+)
+  
+sim_pars <- list(N_ind = 10, #Parameters controlling simulation
+                 S0_mean = 1.5,
+                 S0_sd = 1,
+                 step_size = 0.1,
+                 N_obs = 5, #Observations per individual
+                 census_interval = 5)
+sim_pars$time <- seq(from=0, to=(sim_pars$N_obs*sim_pars$census_interval -1), 
+                     by=sim_pars$census_interval)
+
+data_construction_controls <- list(
+  data_build_models = data_build_models_sample_size,
+  
+  sim_pars = sim_pars,
+  
+  build_data_single_individual = FALSE,
+  
+  #Specify where data is to be saved and loaded from.
+  rstan_data_locations = rstan_data_locations
+)
+
+build_datasets <- TRUE
+
+for(i in c(10, 100, 1000, 10000)){
+  data_construction_controls$sim_pars$N_ind <- i
+  data_construction_controls$rstan_data_locations$single_species_data <- 
+    paste("output/data/", i, "_" , "SingleSpecies_RStan", sep="")
+  
+  if(build_datasets){ #10 indviduals first
+    source("R/BuildData.r", local=TRUE)
+    
+    build_data(data_construction_controls)
+  }
+}
+```
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                     Single time series demonstration
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Here we will demonstrate the effect of each integration method (Euler, midpoint, Runge-Kutta 4th order) on the size and growth parmeter estimates from a single individual's growth history, projected forward with an exponential growth function.
+
+Load in functions.
+```{r}
+source("R/RungeKuttaFunctions.r")
+```
+
+Set parameters and initial condition
+```{r}
+beta <- 1
+S_0 <- 1
+step_size <- 1
+n_step <- 5
+time <- c(0, 1, 2, 3, 4)
+
+#Vectors of data
+est_names <- c("Euler", "Midpoint", "RK4")
+colours <- c("blue", "red", "green4", "black") #Default for non-error models
+```
+
+Numerical integration without MCMC or error, qhich requires knowing the value of beta.
+```{r}
+growth <- function(size, pars){
+  return(pars[1]*size)
+}
+#Euler method
+euler_int <- euler_est(S_0, growth, pars=c(beta), step_size, nstep)
+
+#Midpoint method
+midpoint_int <- midpoint_est(S_0, growth, pars=c(beta), step_size, nstep)
+
+#Runge-Kutta 4th order
+runge_kutta_int <- rk4_est(S_0, growth, pars=c(beta), step_size, nstep)
+```
+Plot the numerical integration projections.
+
+```{r}
+lines_list <- list(euler_int, midpoint_int, runge_kutta_int)
+points_list <- lines_list
+names <- c(est_names, "Function")
+lty_list <- c(1,1,1,1)
+pch_list <- c(3,4,5,NA)
+title <- "Numerical Integration"
+
+#Produce plot
+plot_estimates(lines_list, points_list, names, colours, 
+               pch_list, lty_list, title, lwd=2)
+
+#Save output to file
+file_name <- "output/figures/RungeKuttaDemo/Single_NumericalIntegration.png"
+save_plot_of_estimates(lines_list, points_list, names, colours, pch_list, 
+                       lty_list, title, file_name, lwd=2)
+```
+
+In this instance we will use the analytic solution to construct the data rather than using a forward projection with a numerical method as we did above.
+
+Build base observation data
+```{r}
+N_obs <- n_step
+census <- c(1, 2, 3, 4, 5)
+S_obs <- S_0  * exp(beta*time)
+census_interval <- rep(step_size, times=5) #Step size
+
+rstan_data <- build_rstan_data(N_obs, S_obs, census, census_interval)
+```
+
+Now we construct a data set with measurement error based on the model from Ruger et al 2011.
+```{r}
+set.seed(2022)
+S_obs_err <- c()
+for(i in 1:length(S_obs)){
+  S_obs_err[i] <- add_error(S_obs[i]) #Implementing error model
+}
+
+rstan_data_error <- build_rstan_data(N_obs, S_obs_err, census, census_interval)
+```
+
+From here we run the Bayesian models 
+```{r}
+model_outputs_single <- list()
+```
+
+MCMC estimation from analytic solution to demonstrate the different integration methods. As this will run chains in sequence it may take a few minutes. Output plots can be seen in output/figures/RungeKuttaDemo/.
+```{r}
+model_outputs_single$MCMC <- build_output(rstan_file = "stan/RungeKuttaTest.stan", 
+                                   rstan_data = rstan_data,
+                                   est_names, 
+                                   est_method = "samp",
+                                   int_methods = c(1,2,3),
+                                   title = "MCMC Estimation",
+                                   file_name = "output/figures/RungeKuttaDemo/Single_MCMCIntegration.png",
+                                   names = c(est_names, "Function"),
+                                   colours,
+                                   lty_list <- c(1,1,1,1),
+                                   pch_list <- c(3,4,5,NA),
+                                   estplot = TRUE)
+```
+
+MCMC estimation with measurement error.
+```{r}
+model_outputs_single$MCMC_Error <- build_output(rstan_file = "stan/RungeKuttaTest.stan", 
+                                         rstan_data = rstan_data_error,
+                                         est_names = c("RK4"), 
+                                         est_method = "samp",
+                                         int_methods = 3,
+                                         title = "MCMC Estimation With Error",
+                                         file_name = "output/figures/RungeKuttaDemo/Single_MCMCIntegration_Error.png",
+                                         names = c("RK4", "Observed", "Function"),
+                                         colours = c("green4", "black"))
+```
+
+MCMC estimation with measurement error and a bad growth function, namely constant.
+```{r}
+model_outputs_single$MCMC_Error_const <- build_output(rstan_file = "stan/RungeKuttaTest_Const.stan", 
+                                         rstan_data = rstan_data_error,
+                                         est_names = c("RK4"), 
+                                         est_method = "samp",
+                                         int_methods = 3,
+                                         title = "Constant Growth",
+                                         file_name = "output/figures/RungeKuttaDemo/Single_MCMCIntegration_Error_const.png",
+                                         names = c("RK4", "Observed", "Function"),
+                                         colours = c("green4", "black"))
+```
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                     Multi-individual demonstration
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In this section we will expand our analysis to multiple individuals so we are able to compare the performance of integration methods for species-level parameters, and across individuals.
+
+First we specify which models to run. 
+As written, this code will use MCMC to fit each of constant, exponential, and Canham models to simulated data from those respective growth functions at the multi-species level using the Euler integration method.
+
+To change integration method, modify the int_method parameter. 
+To modify the number of cores, chains, and samples go to the single_species_controls object in the relevant spec file.
+To exclude particular models remove them from the model_list.
+
+Model fits will be saved to output/data/ as .rds files. In the next section the samples will be extracted and transformed into something usable.
+```{r}
+rstan_data_locations <- list(
+  single_species_data = "output/data/SingleSpecies_RStan",
+  single_individual_data = "output/data/SingleInd_RStan"
+)
+
+model_list <- list(
+  canham_model = list(
+    model_spec = "R/CanhamSpec.r",
+    model_name = "Canham",
+    model_file = "Canham"
+  ),
+  
+  const_model = list(
+    model_spec = "R/ConstSpec.r",
+    model_name = "Constant",
+    model_file = "Const"
+  ),
+  
+  exp_model = list(
+    model_spec = "R/ExponentialSpec.r",
+    model_name = "Exponential",
+    model_file = "Exp"
+  )
+)
+  
+#Specify which hierarchy of model to build
+level_of_models <- list(
+  single_species = TRUE,
+  single_individual = FALSE
+)
+
+#Choose "opt" for optimizing() or "samp" for MCMC. This will apply to all models.
+est_method <- "samp" 
+
+#Choose 1: Euler, 2: Midpoint, 3: RK4. This will apply to all models.
+int_method <- 1
+
+#Change to TRUE to run models
+run_models <- TRUE
+```
+
+Now we construct the model building controls.
+```{r}
+model_build_controls <- list(
+  model_list = model_list,
+  
+  level_of_models = level_of_models,
+  
+  rstan_data_locations = rstan_data_locations,
+  
+  plot_diagnostics = TRUE,
+  
+  est_method = est_method,
+  
+  int_method = int_method,
+  
+  inc_warmup = FALSE #Include warmup samples in diagnostic plots
+)
+```
+
+The models are ready to run.
+
+Depending on the integration method, model, chains, and cores this step can take from a few minutes to a few hours. Example fit files are provided if you wish to skip the computationally intensive bit. Running the files as given with chains in sequence rather than parallel takes about an hour.
+```{r}
+if(run_models){ 
+  source("R/RunModels.r", local=TRUE)
+  
+  build_all_models(model_build_controls)
+}
+```
+
+Once the fits are run we can extract the estimates and build output.
+```{r}
+#Sample extraction controls
+extract_samples <- TRUE
+
+#Control list to be passed to sample extraction
+data_extract_controls <- list(
+  model_list = model_list,
+  
+  level_of_models = level_of_models,
+  
+  rstan_data_locations = rstan_data_locations,
+  
+  est_method = est_method,
+  
+  int_method = int_method
+)
+
+#Analysis controls
+analyse_models <- TRUE
+
+analysis_controls <- list(
+  model_list = model_list,
+  
+  est_method = est_method,
+  
+  int_method = int_method
+)
+
+#Run extraction and analysis
+if(extract_samples){
+  source("R/EstimateWrangling.r", local=TRUE)
+  
+  build_extracted_samples(data_extract_controls)
+}
+
+if(analyse_models){
+  source("R/Analyse.r", local=TRUE)
+  
+  model_analysis(analysis_controls)
+}
+```
+
+The compiled data files can be loaded in and examined to see the CIs for species-level estimates, individual-level parameter estimates, and size-level values. Further analysis can be done on the extracted values.
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                        BCI data demonstration
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In this section we will fit a Canham growth model to a sample of individuals from B. tovarensis in the Barro Colorado Island forest plot data. A simple random sample without replacement was used to select 200 individuals with 6 observations. The RStan data file has been constructed and is stored as SingleSpecies_Sampled_RStan_BTovarensis.rds
+
+```{r}
+run_model_BCI_example <- TRUE
+
+if(run_model_BCI_example){
+  source("R/CanhamSpec.r", local=TRUE)
+
+  dataset <- readRDS("output/data/SingleSpecies_RStan_BTovarensis.rds")
+  
+  dataset$int_method <- 3
+  fit <- list()
+  
+  fit[[3]] <- build_rstan_model(stan_controls = single_species_controls$stan_controls, 
+                                model_name = single_species_controls$model_name,
+                                stan_file_name = single_species_controls$stan_file_path,
+                                est_method = "samp",
+                                dataset) #Index 3 used to fit into the existing functions
+  
+  filename <- paste(single_species_controls$fit_save_path, "BTovarensis", sep="_")
+  filename <- paste(filename, ".rds", sep="")
+  saveRDS(fit, file=filename) #Output to file
+  
+  #Wrangle file names for diagnostic plots
+  diag_list <- single_species_controls$diagnostic_list
+  for(j in 1:length(diag_list)){
+    diag_list[[j]]$name <- paste(diag_list[[j]]$name, "BTovarensis", sep="_")
+  }
+  #Plot diagnostics
+  plot_all_diagnostics(fit[[3]], int_method = 3, 
+                       diag_list,
+                       inc_warmup = FALSE)
+  
+  fit <- fit[[3]] #get rid of other elements
+  
+  #Further diagnostics
+  #Initialise data frame for Rhat diagnostics.
+  Rhat_data <- data.frame(row.names=names(fit@sim[["samples"]][[1]]))
+  #Extract values to data frame
+  for(i in 1:length(fit@sim[["samples"]])){
+    for(j in 1:length(fit@sim[["samples"]][[1]])){
+      Rhat_data[j,i] <- Rhat(fit@sim[["samples"]][[i]][[j]])
+    }
+  }
+  #Get a histogram of all the RHats
+  histvec <- c()
+  for(i in 1:ncol(Rhat_data)){ histvec <- c(histvec, Rhat_data[,i]) }
+  hist(histvec, col="lightblue", main="Histogram of Rhats for all chains", xlab="Rhat")
+  length(which(histvec > 1.05))
+}
+```
