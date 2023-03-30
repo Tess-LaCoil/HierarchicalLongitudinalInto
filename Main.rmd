@@ -394,12 +394,13 @@ The compiled data files can be loaded in and examined to see the CIs for species
 In this section we will fit a Canham growth model to a sample of individuals from B. tovarensis in the Barro Colorado Island forest plot data. A simple random sample without replacement was used to select 200 individuals with 6 observations. The RStan data file has been constructed and is stored as SingleSpecies_Sampled_RStan_BTovarensis.rds
 
 ```{r}
-run_model_BCI_example <- TRUE
+run_model_BCI_example <- FALSE
 
 if(run_model_BCI_example){
   source("R/CanhamSpec.r", local=TRUE)
+  source("R/RunModels.r", local=TRUE)
 
-  dataset <- readRDS("output/data/SingleSpecies_RStan_BTovarensis.rds")
+  dataset <- readRDS("output/data/SingleSpecies_RStan_PPanamense.rds")
   
   dataset$int_method <- 3
   fit <- list()
@@ -410,14 +411,14 @@ if(run_model_BCI_example){
                                 est_method = "samp",
                                 dataset) #Index 3 used to fit into the existing functions
   
-  filename <- paste(single_species_controls$fit_save_path, "BTovarensis", sep="_")
+  filename <- paste(single_species_controls$fit_save_path, "PPanamense", sep="_")
   filename <- paste(filename, ".rds", sep="")
   saveRDS(fit, file=filename) #Output to file
   
   #Wrangle file names for diagnostic plots
   diag_list <- single_species_controls$diagnostic_list
   for(j in 1:length(diag_list)){
-    diag_list[[j]]$name <- paste(diag_list[[j]]$name, "BTovarensis", sep="_")
+    diag_list[[j]]$name <- paste(diag_list[[j]]$name, "PPanamense", sep="_")
   }
   #Plot diagnostics
   plot_all_diagnostics(fit[[3]], int_method = 3, 
@@ -440,5 +441,159 @@ if(run_model_BCI_example){
   for(i in 1:ncol(Rhat_data)){ histvec <- c(histvec, Rhat_data[,i]) }
   hist(histvec, col="lightblue", main="Histogram of Rhats for all chains", xlab="Rhat")
   length(which(histvec > 1.05))
+  
+  rm(fit)
+}
+```
+
+Once the model has been fit and the diagnostics do not indicate problems, we can extract the fitted values and analyse them.
+```{r}
+extract_analyse <- TRUE
+
+if(extract_analyse){
+  #Load in files
+  fit <- readRDS("output/data/Single_Species_Fit_Canham_PPanamense.rds")
+  fit <- fit[[3]] #get rid of other elements
+  dataset <- readRDS("output/data/SingleSpecies_RStan_PPanamense.rds")
+  dataset$int_method <- 3
+  
+  source("R/EstimateWrangling.r", local=TRUE)
+  source("R/Analyse.r", local=TRUE)
+  source("R/CanhamSpec.r", local=TRUE)
+  
+  #Sample extraction and analysis
+  #Building data frames
+  measurement_data <- tibble(treeid_factor = dataset$treeid_factor,
+                             S_obs = dataset$S_obs,
+                             census = dataset$census,
+                             census_interval = dataset$census_interval)
+  measurement_data <- measurement_data %>% 
+    group_by(treeid_factor) %>%
+    mutate(treeid = dataset$tree_id_vec[treeid_factor],
+           time=cumsum(census_interval)) %>%
+    ungroup()
+  
+  individual_data <- tibble(treeid = dataset$tree_id_vec,
+                            treeid_factor = 1:200)
+  
+  #Extract samples
+  est_data <- rstan::extract(fit, permuted=TRUE)
+  
+  #Measurement-level data
+  measurement_data$S_hat <- apply(est_data$S_hat, 2, mean)
+  measurement_data$G_hat <- apply(est_data$G_hat, 2, mean)
+  
+  #Individual-level data
+  for(i in ind_pars){
+    individual_data[[ind_pars_names[which(ind_pars == i)]]] <- apply(est_data[[i]], 2, mean)
+  }
+  for(i in 1:length(growth_par_names)){
+    hist(individual_data[[growth_par_names[i]]], xlab=plot_par_names[i], 
+         col="lightblue", main="", breaks=10)
+  }
+  
+  #Get final size for each individual
+  temp <- measurement_data %>%
+    group_by(treeid) %>%
+    mutate(S_final = max(S_hat)) %>%
+    distinct(treeid, S_final) %>%
+    ungroup() %>%
+    select(S_final)
+
+  individual_data$S_final <- temp$S_final
+  
+  #Compare individual-level parameters
+  pairs(~individual_data$canham_max_growth_hat + 
+          individual_data$canham_diameter_at_max_growth_hat +
+          individual_data$canham_K_hat,
+        labels = c("g_max", "S_max", "K"))
+  
+  #Large-scale plot of single pair
+  pairplot <- ggplot(data=individual_data, aes(x,y))+
+    geom_point(aes(x=canham_max_growth_hat, y=canham_K_hat), 
+               size=2, color="green4", alpha=0.6) +
+    labs(x = "g_max", y = "k") +
+    theme_classic()
+  
+  #Species-level data
+  species_par_est <- c()
+  for(i in 1:length(sp_pars)){ #Extract estimates
+    species_par_est[i] <- mean(est_data[[sp_pars[i]]])
+  }
+  species_data <- tibble(species_par_est, sp_pars_names, Lower=c(), Upper=c())
+  #Build CIs
+  hyperpar_CI <- build_par_CI(est_data, sp_pars, sp_pars_names)
+  for(i in 1:length(hyperpar_CI)){
+    species_data$Lower[i] <- hyperpar_CI[[i]][[1]]
+    species_data$Upper[i] <- hyperpar_CI[[i]][[2]]
+  }
+  
+  #Save data to file
+  save_data <- list(individual_data = individual_data,
+                    measurement_data = measurement_data,
+                    species_data = species_data)
+  save_filename <- "output/data/PPanamense_Sampled_Canham.rds"
+  saveRDS(save_data, file=save_filename)
+  
+  #Plots of individual sizes over time, estimated and observed
+  n_ind <- 200 #Number of plots to do
+  plot_obs_and_est_life_history(measurement_data, n_ind, "Canham")
+  
+  #Plots of sizes over time, and growth over size, for all individuals
+  plot_est_life_history(measurement_data, model_name="Canham")
+  
+  #Plot of individual size over time based on percentiles of individual parameters
+  ind_pars_est <- c(g_max <- quantile(individual_data$canham_max_growth_hat, 0.5),
+                       S_max <- quantile(individual_data$canham_diameter_at_max_growth_hat, 0.5),
+                       k <- quantile(individual_data$canham_K_hat, 0.5))
+  pop_pars_est <- c(g_max_mean <- exp(species_data$species_par_est[1]),
+                     S_max_mean <- exp(species_data$species_par_est[3]),
+                     k_mean <- exp(species_data$species_par_est[5]))
+  
+  S_0 <- rep(3, n_ind) #Start at 3cm in size to avoid getting stuck at 1cm
+  step_size <- 0.1 #Precision of integration method
+  lifespan <- 500 #How long to project forward tree size.
+  
+  plot_pair_life_history(pop_pars_est, ind_pars_est, growth_function, 
+                    name = "BCIAvg", 
+                    S_0, step_size, lifespan)
+  
+  #Take sample of individual growth parameters from posterior and plot them
+  n_ind <- 200
+  indices <- sample(c(1:200), size=n_ind)
+  sample_index <- rdunif(1, 4000, 1)
+  post_pars <- data.frame(g_max = est_data$ind_max_growth[sample_index, indices], 
+                     s_max = est_data$ind_diameter_at_max_growth[sample_index, indices], 
+                     k = est_data$ind_K[sample_index, indices])
+  temp <- data.frame(g_max = est_data$ind_max_growth[sample_index, indices], 
+                     s_max = est_data$ind_diameter_at_max_growth[sample_index, indices], 
+                     k = est_data$ind_K[sample_index, indices])
+  post_pars <- rbind(post_pars, temp)
+  #Plot the sampled growth function histories, with population averages over the top
+  plot_sample_life_history(post_pars, growth_function, 
+                           name = "PPanamense", 
+                           n_ind, S_0, step_size=step_size, lifespan=lifespan)
+  
+  #Plot growth functions for all individuals.
+  growth_par_ests <- data.frame(g_max = individual_data$canham_max_growth_hat, 
+                                s_max = individual_data$canham_diameter_at_max_growth_hat, 
+                                k = individual_data$canham_K_hat)
+  
+  plot_sample_life_history(growth_par_ests, growth_function, 
+                           name = "PPanamense_From_S_0", 
+                           n_ind, 
+                           S_0 = individual_data$canham_S_0_hat, 
+                           S_final = individual_data$S_final,
+                           step_size, lifespan = 300,
+                           min_growth_size = min(individual_data$canham_S_0_hat),
+                           max_growth_size = 100)
+  
+  plot_sample_life_history(growth_par_ests, growth_function, 
+                           name = "PPanamense_Observed", 
+                           n_ind, 
+                           S_0 = individual_data$canham_S_0_hat, 
+                           S_final = individual_data$S_final,
+                           step_size = step_size, 
+                           lifespan = 30)
 }
 ```
