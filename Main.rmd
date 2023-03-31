@@ -394,7 +394,7 @@ The compiled data files can be loaded in and examined to see the CIs for species
 In this section we will fit a Canham growth model to a sample of individuals from B. tovarensis in the Barro Colorado Island forest plot data:
 Condit, R., S. Lao, R. Pérez, S. Aguilar, R.B. Foster, S.P. Hubbell. (2019). Complete data from the Barro Colorado 50-ha plot: 423617 trees, 35 years, v3, DataONE Dash, Dataset, https://doi.org/10.15146/5xcp-0d46.
 
-A simple random sample without replacement was used to select 200 individuals with 6 observations. The RStan data file has been constructed and is stored as SingleSpecies_Sampled_RStan_BTovarensis.rds
+A simple random sample without replacement was used to select 200 individuals with 6 observations. The RStan data file has been constructed and is stored as SingleSpecies_RStan_BTovarensis.rds in the data folder.
 
 ```{r}
 run_model_BCI_example <- FALSE
