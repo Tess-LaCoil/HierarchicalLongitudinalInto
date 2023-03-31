@@ -18,10 +18,11 @@ library(latex2exp)
 library(grid)
 ```
 
-First, we will generate the simulated data required for demonstrations with both single and multiple individuals, using three different growth functions (constant, exponential, and Canham), then data with a constant growth function to explore sample size effects.
+In this code we walk through the analysis for [preprint], building a method for fitting a hierarchical Bayesian longitudinal model to repeat measurement data.
 
-All data simulated for the paper is provided in the output/data/ directory. Saving over these files will slightly change the analysis as there is random generation involved.
+In this analysis we will build simulated datasets of tree size with various growth functions, then fit models to that data. We will also demonstrate the method applied to a real-world dataset. In the course of the investigation we consider the behaviour of different sample sizes, growth functions, and numerical integration methods.
 
+The data files used in the paper are available as a release associated with the repo. We have included the data we use from BCI in the repo itself, which is sampled from a bigger dataset. Details for where to access the raw data is available in the relevant section.
 
 First we set the file locations for output and initialise data structures.
 ```{r}
@@ -390,7 +391,10 @@ The compiled data files can be loaded in and examined to see the CIs for species
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                         BCI data demonstration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-In this section we will fit a Canham growth model to a sample of individuals from B. tovarensis in the Barro Colorado Island forest plot data. A simple random sample without replacement was used to select 200 individuals with 6 observations. The RStan data file has been constructed and is stored as SingleSpecies_Sampled_RStan_BTovarensis.rds
+In this section we will fit a Canham growth model to a sample of individuals from B. tovarensis in the Barro Colorado Island forest plot data:
+Condit, R., S. Lao, R. Pérez, S. Aguilar, R.B. Foster, S.P. Hubbell. (2019). Complete data from the Barro Colorado 50-ha plot: 423617 trees, 35 years, v3, DataONE Dash, Dataset, https://doi.org/10.15146/5xcp-0d46.
+
+A simple random sample without replacement was used to select 200 individuals with 6 observations. The RStan data file has been constructed and is stored as SingleSpecies_Sampled_RStan_BTovarensis.rds
 
 ```{r}
 run_model_BCI_example <- FALSE
@@ -399,7 +403,7 @@ if(run_model_BCI_example){
   source("R/CanhamSpec.r", local=TRUE)
   source("R/RunModels.r", local=TRUE)
 
-  dataset <- readRDS("output/data/SingleSpecies_RStan_PPanamense.rds")
+  dataset <- readRDS("data/SingleSpecies_RStan_PPanamense.rds")
   
   dataset$int_method <- 3
   fit <- list()
