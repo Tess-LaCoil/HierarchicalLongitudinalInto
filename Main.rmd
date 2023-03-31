@@ -3,8 +3,23 @@ output: html_document
 editor_options: 
   chunk_output_type: console
 ---
+In this code we walk through the analysis for [preprint], building a method for fitting a hierarchical Bayesian longitudinal model to repeat measurement data.
 
+In this analysis we will build simulated datasets of tree size with various growth functions, then fit models to that data. We will also demonstrate the method applied to a real-world dataset. In the course of the investigation we consider the behaviour of different sample sizes, growth functions, and numerical integration methods.
 
+The data files used in the paper are available as a release associated with the repo. We have included the data we use from BCI in the repo itself, which is sampled from a bigger dataset. Details for where to access the raw data is available in the relevant section.
+
+Build file structures for output.
+```{r}
+if (!file.exists("output")){
+  dir.create("output")
+  dir.create("output/data")
+  dir.create("output/figures")
+  dir.create("output/figures/diagnostic")
+  dir.create("output/figures/sampled")
+  dir.create("output/figures/RungeKuttaDemo")
+}
+```
 
 Load libraries:
 ```{r}
@@ -18,11 +33,7 @@ library(latex2exp)
 library(grid)
 ```
 
-In this code we walk through the analysis for [preprint], building a method for fitting a hierarchical Bayesian longitudinal model to repeat measurement data.
-
-In this analysis we will build simulated datasets of tree size with various growth functions, then fit models to that data. We will also demonstrate the method applied to a real-world dataset. In the course of the investigation we consider the behaviour of different sample sizes, growth functions, and numerical integration methods.
-
-The data files used in the paper are available as a release associated with the repo. We have included the data we use from BCI in the repo itself, which is sampled from a bigger dataset. Details for where to access the raw data is available in the relevant section.
+Now we are ready to start doing things.
 
 First we set the file locations for output and initialise data structures.
 ```{r}
