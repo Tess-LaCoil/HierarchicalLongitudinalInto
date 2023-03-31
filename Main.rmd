@@ -201,7 +201,6 @@ rstan_data <- build_rstan_data(N_obs, S_obs, census, census_interval)
 
 Now we construct a data set with measurement error based on the model from Ruger et al 2011.
 ```{r}
-set.seed(2022)
 S_obs_err <- c()
 for(i in 1:length(S_obs)){
   S_obs_err[i] <- add_error(S_obs[i]) #Implementing error model
