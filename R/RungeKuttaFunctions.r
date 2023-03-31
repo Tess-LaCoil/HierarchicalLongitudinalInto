@@ -84,6 +84,7 @@ plot_estimates <- function(lines, points, names, colours, pch_vals, lty_vals, ti
 
 #Plot results from estimates
 plot_results <- function(estimates, 
+                         rstan_data,
                          est_names, 
                          title, 
                          file_name,
@@ -92,12 +93,12 @@ plot_results <- function(estimates,
                          lty_list,
                          pch_list){
   lines_list <- list()
-  for(i in length(estimates$S_hat)){
+  for(i in 1:length(estimates$S_hat)){
     lines_list[[i]] <- estimates$S_hat[[i]]
   }
   
   points_list <- lines_list
-  points_list[[length(points_list)+1]] <- S_obs_err
+  points_list[[length(points_list)+1]] <- rstan_data[[1]]$S_obs
   save_plot_of_estimates(lines_list, points_list, names, colours, pch_list, 
                          lty_list, title, file_name, lwd=1.5)
 }
@@ -178,7 +179,6 @@ build_rstan_data <- function(N_obs, S_obs, census, census_interval){
 }
 
 #Produce list of RStan data lists for each integration method with multiple individuals
-#FINISH THIS
 build_rstan_data_multi_ind <- function(N_obs, N_ind, sim_data, int_method, 
                                        S_0_obs, tree_id_vec){
   rstan_data <- list()
@@ -304,6 +304,7 @@ build_output <- function(rstan_file,
   
   #Plot results
   plot_results(model_output$estimates, 
+               rstan_data,
                est_names, 
                title, 
                file_name,

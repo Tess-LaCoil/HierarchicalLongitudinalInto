@@ -153,7 +153,7 @@ est_names <- c("Euler", "Midpoint", "RK4")
 colours <- c("blue", "red", "green4", "black") #Default for non-error models
 ```
 
-Numerical integration without MCMC or error, qhich requires knowing the value of beta.
+Numerical integration without MCMC or error, which requires knowing the value of beta.
 ```{r}
 growth <- function(size, pars){
   return(pars[1]*size)
@@ -237,7 +237,7 @@ model_outputs_single$MCMC_Error <- build_output(rstan_file = "stan/RungeKuttaTes
                                          rstan_data = rstan_data_error,
                                          est_names = c("RK4"), 
                                          est_method = "samp",
-                                         int_methods = 3,
+                                         int_methods = c(3),
                                          title = "MCMC Estimation With Error",
                                          file_name = "output/figures/RungeKuttaDemo/Single_MCMCIntegration_Error.png",
                                          names = c("RK4", "Observed", "Function"),
