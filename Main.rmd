@@ -594,6 +594,7 @@ if(extract_analyse){
                            name = "PPanamense_Posterior_Samples", 
                            n_ind, S_0, step_size=step_size, lifespan=lifespan)
   
+  #
   #Plot growth functions for all individuals.
   growth_par_ests <- data.frame(g_max = individual_data$canham_max_growth_hat, 
                                 s_max = individual_data$canham_diameter_at_max_growth_hat, 
