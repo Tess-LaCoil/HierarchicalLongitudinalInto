@@ -535,6 +535,12 @@ if(extract_analyse){
   save_filename <- "output/data/PPanamense_Sampled_Canham.rds"
   saveRDS(save_data, file=save_filename)
   
+  #Load if needed
+  save_data <- readRDS("output/data/PPanamense_Sampled_Canham.rds")
+  individual_data <- save_data$individual_data
+  measurement_data <- save_data$measurement_data
+  species_data <- save_data$species_data
+  
   #Plots of individual sizes over time, estimated and observed
   n_ind <- 200 #Number of plots to do
   plot_obs_and_est_life_history(measurement_data, n_ind, "Canham")
@@ -552,7 +558,7 @@ if(extract_analyse){
   
   S_0 <- rep(3, n_ind) #Start at 3cm in size to avoid getting stuck at 1cm
   step_size <- 0.1 #Precision of integration method
-  lifespan <- 500 #How long to project forward tree size.
+  lifespan <- 300 #How long to project forward tree size.
   
   plot_pair_life_history(pop_pars_est, ind_pars_est, growth_function, 
                     name = "BCIAvg", 
@@ -569,9 +575,9 @@ if(extract_analyse){
                      s_max = est_data$ind_diameter_at_max_growth[sample_index, indices], 
                      k = est_data$ind_K[sample_index, indices])
   post_pars <- rbind(post_pars, temp)
-  #Plot the sampled growth function histories, with population averages over the top
+  #Plot the sampled growth function histories
   plot_sample_life_history(post_pars, growth_function, 
-                           name = "PPanamense", 
+                           name = "PPanamense_Posterior_Samples", 
                            n_ind, S_0, step_size=step_size, lifespan=lifespan)
   
   #Plot growth functions for all individuals.
@@ -579,6 +585,12 @@ if(extract_analyse){
                                 s_max = individual_data$canham_diameter_at_max_growth_hat, 
                                 k = individual_data$canham_K_hat)
   
+  #Plot the growth function histories starting at 3cm
+  plot_sample_life_history(growth_par_ests, growth_function, 
+                           name = "PPanamense_EstimatedPars", 
+                           n_ind, S_0, step_size=step_size, lifespan=lifespan)
+  
+  #Plot the growth function histories starting at S_0
   plot_sample_life_history(growth_par_ests, growth_function, 
                            name = "PPanamense_From_S_0", 
                            n_ind, 
