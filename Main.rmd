@@ -47,23 +47,23 @@ data_build_models <- list(
     model_spec = "R/CanhamSpec.r",
     model_name = "Canham",
     model_file = "Canham"
-  ),
+  )#,
   
-  const_model = list(
-    model_spec = "R/ConstSpec.r",
-    model_name = "Constant",
-    model_file = "Const"
-  ),
+#  const_model = list(
+#    model_spec = "R/ConstSpec.r",
+#    model_name = "Constant",
+#    model_file = "Const"
+#  ),
   
-  exp_model = list(
-    model_spec = "R/ExponentialSpec.r",
-    model_name = "Exponential",
-    model_file = "Exp"
-  )
+#  exp_model = list(
+#    model_spec = "R/ExponentialSpec.r",
+#    model_name = "Exponential",
+#    model_file = "Exp"
+#  )
 )
   
-sim_pars <- list(N_ind = 100, #Parameters controlling simulation
-                 S0_mean = 1.5,
+sim_pars <- list(N_ind = 20, #Parameters controlling simulation
+                 S0_mean = 2,
                  S0_sd = 1,
                  step_size = 0.1,
                  N_obs = 5, #Observations per individual
@@ -79,6 +79,8 @@ data_construction_controls <- list(
   sim_pars = sim_pars,
   
   build_data_single_individual = TRUE,
+  
+  error_type = "Norm", #Norm for N(0, 0.5) error, Ruger for more complex model
   
   #Specify where data is to be saved and loaded from.
   rstan_data_locations = rstan_data_locations
@@ -124,10 +126,12 @@ data_construction_controls <- list(
   build_data_single_individual = FALSE,
   
   #Specify where data is to be saved and loaded from.
-  rstan_data_locations = rstan_data_locations
+  rstan_data_locations = rstan_data_locations,
+  
+  error_type="Norm"
 )
 
-build_datasets <- TRUE
+build_datasets <- FALSE
 
 for(i in c(10, 100, 1000, 10000)){
   data_construction_controls$sim_pars$N_ind <- i
@@ -211,11 +215,11 @@ census_interval <- rep(step_size, times=5) #Step size
 rstan_data <- build_rstan_data(N_obs, S_obs, census, census_interval)
 ```
 
-Now we construct a data set with measurement error based on the model from Ruger et al 2011.
+Now we construct a data set with measurement error.
 ```{r}
 S_obs_err <- c()
 for(i in 1:length(S_obs)){
-  S_obs_err[i] <- add_error(S_obs[i]) #Implementing error model
+  S_obs_err[i] <- add_error(S_obs[i], "Norm") #Implementing error model
 }
 
 rstan_data_error <- build_rstan_data(N_obs, S_obs_err, census, census_interval)
@@ -292,6 +296,13 @@ model_list <- list(
     model_spec = "R/CanhamSpec.r",
     model_name = "Canham",
     model_file = "Canham"
+  ))#,
+  
+storage_list <- list(
+  canham_model = list(
+    model_spec = "R/CanhamSpec.r",
+    model_name = "Canham",
+    model_file = "Canham"
   ),
   
   const_model = list(
@@ -317,7 +328,7 @@ level_of_models <- list(
 est_method <- "samp" 
 
 #Choose 1: Euler, 2: Midpoint, 3: RK4. This will apply to all models.
-int_method <- 1
+int_method <- 3 
 
 #Change to TRUE to run models
 run_models <- TRUE

@@ -31,7 +31,7 @@ rk4_est <- function(S_0, growth, pars, step_size, nstep){
     k3 <- growth((runge_kutta_int[i-1] + step_size*k2/2), pars)
     k4 <- growth((runge_kutta_int[i-1] + step_size*k3), pars)
     
-    runge_kutta_int[i] <- runge_kutta_int[i-1] + (1/6)*(k1 + 2*k2 + 2*k3 + k4)
+    runge_kutta_int[i] <- runge_kutta_int[i-1] + (step_size/6)*(k1 + 2*k2 + 2*k3 + k4)
   }
   return(runge_kutta_int)
 }
@@ -155,10 +155,20 @@ build_estplot <- function(means){
 #                           Data Construction Functions
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #Add error based on Ruger et al 2011 error model and parameter estimates
-add_error <- function(size){
-  SD1 <- 0.927 + 0.0038*size
-  SD2 <- 2.56
-  size_with_error <- size + rnorm(1, mean=0, sd=SD1) + rbinom(1, size=1, prob=0.0276)*2.56
+add_error <- function(size, error_type="Norm"){
+  if(error_type == "Ruger"){ #Model from Ruger 2011
+    SD1 <- 0.927 + 0.0038*size
+    SD2 <- 2.56
+    size_with_error <- size + rnorm(1, mean=0, sd=SD1) + rbinom(1, size=1, prob=0.0276)*2.56
+    
+  } else if(error_type == "Norm") { #Normally distributed error
+    size_with_error <- size + rnorm(1, mean=0, sd=1)
+    
+  } else { #No error type or wrong error type
+    print("Please input valid error type.")
+    size_with_error <- -1
+  }
+  
   return(size_with_error)
 }
 

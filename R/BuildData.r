@@ -11,7 +11,8 @@ build_data <- function(data_construction_controls){
     filename <- paste(data_construction_controls$rstan_data_locations$single_species_data,
                       i$model_name, sep="_")
     filename <- paste(filename, ".rds", sep="")
-    build_sim_data(growth_function, growth_function_pars, 
+    build_sim_data(data_construction_controls$error_type,
+                   growth_function, growth_function_pars, 
                    data_construction_controls$sim_pars, 
                    sim_spec, filename) #Produce data
     
@@ -38,10 +39,20 @@ build_data <- function(data_construction_controls){
 }
 
 #Add error based on Ruger et al 2011 error model and parameter estimates
-add_error <- function(size){
-  SD1 <- 0.927 + 0.0038*size
-  SD2 <- 2.56
-  size_with_error <- size + rnorm(1, mean=0, sd=SD1) + rbinom(1, size=1, prob=0.0276)*2.56
+add_error <- function(size, error_type="Norm"){
+  if(error_type == "Ruger"){ #Model from Ruger 2011
+    SD1 <- 0.927 + 0.0038*size
+    SD2 <- 2.56
+    size_with_error <- size + rnorm(1, mean=0, sd=SD1) + rbinom(1, size=1, prob=0.0276)*2.56
+    
+  } else if(error_type == "Norm") { #Normally distributed error
+    size_with_error <- size + rnorm(1, mean=0, sd=1)
+    
+  } else { #No error type or wrong error type
+    print("Please input valid error type.")
+    size_with_error <- -1
+  }
+  
   return(size_with_error)
 }
 
@@ -82,7 +93,8 @@ build_rstan_data_multi_ind <- function(N_obs, N_ind, sim_data_list){
 }
 
 #Build simulated data based on specified growth function and parameter distributions
-build_sim_data <- function(growth_function, growth_function_pars, sim_pars, sim_spec, filename){
+build_sim_data <- function(error_type, growth_function, growth_function_pars, 
+                           sim_pars, sim_spec, filename){
   #Extract values to easier variable names
   time <- sim_pars$time
   N_step <- sim_pars$N_step
@@ -130,7 +142,7 @@ build_sim_data <- function(growth_function, growth_function_pars, sim_pars, sim_
       sim_data$S_true[((i-1)*sim_pars$N_obs+1): (i*sim_pars$N_obs)] <- runge_kutta_obs
       
       for(j in 1:sim_pars$N_obs){ #Add error, abs() to prevent negative size
-        sim_data$S_obs[((i-1)*sim_pars$N_obs+j)] <- abs(add_error(runge_kutta_obs[j]))
+        sim_data$S_obs[((i-1)*sim_pars$N_obs+j)] <- abs(add_error(runge_kutta_obs[j], error_type))
       }
       
     } else {

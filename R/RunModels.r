@@ -61,7 +61,8 @@ build_fit <- function(model_controls, plot_diagnostics,
     if(plot_diagnostics && (est_method == "samp")){
       plot_all_diagnostics(fit[[i]], int_method = i, 
                            model_controls$diagnostic_list,
-                           inc_warmup = inc_warmup)
+                           inc_warmup = inc_warmup, 
+                           RHat_name = model_controls$model_name)
     }
   }
   
@@ -111,17 +112,29 @@ build_rstan_model <- function(stan_controls,
 #Diagnostic plots requested for particular fit
 # list_of_data is a list of lists, each entry is a list consisting 
 # of a vector of parameters to be plotted, and the name of the plot.
-plot_all_diagnostics <- function(fit, int_method, list_of_data, inc_warmup){
+plot_all_diagnostics <- function(fit, int_method, list_of_data, inc_warmup, RHat_name){
   for(i in 1:length(list_of_data)){
-    plot_diagnostic(fit, int_method, 
-                    pars=list_of_data[[i]]$pars, 
-                    name=list_of_data[[i]]$name,
-                    inc_warmup)
+    plot_diagnostic_trace(fit, int_method, 
+                          pars=list_of_data[[i]]$pars, 
+                          name=list_of_data[[i]]$name,
+                          inc_warmup)
   } 
+  
+  #Histogram of R_hat
+  #Expect to see NaNs for each final size as growth is not estimated.
+  fit_summary <- summary(fit)
+  Rhat <- fit_summary$summary[,10]
+  n_NaN <- length(which(is.na(Rhat)))
+  n <- length(Rhat)
+  
+  filename <- paste0("output/figures/diagnostic/", RHat_name, int_method, "_RHat_Hist.png")
+  png(filename, width=500, height=300)
+  hist(Rhat, main=paste(n_NaN,"NaN values from", n, "Rhats"))
+  dev.off()
 }
 
 #Save diagnostic plot to file
-plot_diagnostic <- function(fit, int_method, pars, name, inc_warmup){
+plot_diagnostic_trace <- function(fit, int_method, pars, name, inc_warmup){
   filename <- paste0("output/figures/diagnostic/", name, int_method, ".png")
   png(filename, width=800, height=800)
   print(traceplot(fit, pars=pars, inc_warmup=inc_warmup))

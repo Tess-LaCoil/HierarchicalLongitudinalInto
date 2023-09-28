@@ -55,7 +55,7 @@ single_individual_controls <- list(
   stan_controls = list(
     iter = 2000,
     chains = 4,
-    cores = 1,
+    cores = 4,
     control = list(max_treedepth = 15)
   ),
   diagnostic_list = diagnostic_list_single_individual
@@ -104,7 +104,7 @@ scatterplot_list <- list(
     par = "S_hat",
     name = "S_hat",
     par_name = "Estimated Size",
-    log_log = FALSE
+    log_log = TRUE
   ),
   
   growth_plot = list(
@@ -179,9 +179,9 @@ growth_function_pars <- c("g_max", "s_max", "k")
 
 sim_spec <- function(n){
   tibble(
-    g_max = exp(rnorm(n, mean=0.5, sd=0.1)),
-    s_max = exp(rnorm(n, mean=2.5, sd=0.1)),
-    k = exp(rnorm(n, mean=log(0.512), sd=0.1))
+    g_max = exp(rnorm(n, mean=0.5, sd=0.1)), #exp(0.5), 
+    s_max = exp(rnorm(n, mean=1.8, sd=0.1)), # exp(2.5),
+    k = exp(rnorm(n, mean=log(0.512), sd=0.1)) #
   )
 }
 
