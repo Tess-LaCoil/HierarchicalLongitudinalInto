@@ -31,6 +31,7 @@ library(ggbeeswarm)
 library(parallel)
 library(latex2exp)
 library(grid)
+library(svglite)
 ```
 
 Now we are ready to start doing things.
@@ -198,7 +199,7 @@ plot_estimates(lines_list, points_list, names, colours,
                pch_list, lty_list, title, lwd=2)
 
 #Save output to file
-file_name <- "output/figures/RungeKuttaDemo/Single_NumericalIntegration.png"
+file_name <- "output/figures/RungeKuttaDemo/Single_NumericalIntegration.svg"
 save_plot_of_estimates(lines_list, points_list, names, colours, pch_list, 
                        lty_list, title, file_name, lwd=2)
 ```
@@ -232,13 +233,13 @@ model_outputs_single <- list()
 
 MCMC estimation from analytic solution to demonstrate the different integration methods. As this will run chains in sequence it may take a few minutes. Output plots can be seen in output/figures/RungeKuttaDemo/.
 ```{r}
-model_outputs_single$MCMC <- build_output(rstan_file = "stan/RungeKuttaTest.stan", 
+model_outputs_single$MCMC <- build_output(rstan_file = "stan/Exp_SingleIndividual.stan", 
                                    rstan_data = rstan_data,
                                    est_names, 
                                    est_method = "samp",
                                    int_methods = c(1,2,3),
                                    title = "MCMC Estimation",
-                                   file_name = "output/figures/RungeKuttaDemo/Single_MCMCIntegration.png",
+                                   file_name = "output/figures/RungeKuttaDemo/Single_MCMCIntegration.svg",
                                    names = c(est_names, "Function"),
                                    colours,
                                    lty_list <- c(1,1,1,1),
@@ -248,26 +249,26 @@ model_outputs_single$MCMC <- build_output(rstan_file = "stan/RungeKuttaTest.stan
 
 MCMC estimation with measurement error.
 ```{r}
-model_outputs_single$MCMC_Error <- build_output(rstan_file = "stan/RungeKuttaTest.stan", 
+model_outputs_single$MCMC_Error <- build_output(rstan_file = "stan/Exp_SingleIndividual.stan", 
                                          rstan_data = rstan_data_error,
                                          est_names = c("RK4"), 
                                          est_method = "samp",
                                          int_methods = c(3),
                                          title = "MCMC Estimation With Error",
-                                         file_name = "output/figures/RungeKuttaDemo/Single_MCMCIntegration_Error.png",
+                                         file_name = "output/figures/RungeKuttaDemo/Single_MCMCIntegration_Error.svg",
                                          names = c("RK4", "Observed", "Function"),
                                          colours = c("green4", "black"))
 ```
 
 MCMC estimation with measurement error and a bad growth function, namely constant.
 ```{r}
-model_outputs_single$MCMC_Error_const <- build_output(rstan_file = "stan/RungeKuttaTest_Const.stan", 
+model_outputs_single$MCMC_Error_const <- build_output(rstan_file = "stan/ConstGrowth_SingleIndividual.stan", 
                                          rstan_data = rstan_data_error,
                                          est_names = c("RK4"), 
                                          est_method = "samp",
                                          int_methods = 3,
                                          title = "Constant Growth",
-                                         file_name = "output/figures/RungeKuttaDemo/Single_MCMCIntegration_Error_const.png",
+                                         file_name = "output/figures/RungeKuttaDemo/Single_MCMCIntegration_Error_const.svg",
                                          names = c("RK4", "Observed", "Function"),
                                          colours = c("green4", "black"))
 ```
@@ -367,7 +368,7 @@ if(run_models){
 Once the fits are run we can extract the estimates and build output.
 ```{r}
 #Sample extraction controls
-extract_samples <- TRUE
+extract_samples <- FALSE
 
 #Control list to be passed to sample extraction
 data_extract_controls <- list(

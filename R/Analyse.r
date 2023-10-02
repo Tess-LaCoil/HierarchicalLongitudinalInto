@@ -63,7 +63,7 @@ build_scatterplot <- function(data, scatterplot_list_item, model_name){
     plot_data <- plot_data %>% na.omit() #Remove NAs
     
     #Build spec object
-    filename <- paste("output/figures/Scatter_Size_", model_name, ".png", sep="")
+    filename <- paste("output/figures/Scatter_Size_", model_name, ".svg", sep="")
     plot_spec <- list(xlab="True size cm",
                       ylab="Estimated size cm",
                       filename = filename,
@@ -90,7 +90,7 @@ build_scatterplot <- function(data, scatterplot_list_item, model_name){
     plot_data <- plot_data %>% na.omit() #Remove NAs
     
     #Build spec object
-    filename <- paste("output/figures/Scatter_Growth", model_name, ".png", sep="")
+    filename <- paste("output/figures/Scatter_Growth", model_name, ".svg", sep="")
     plot_spec <- list(xlab="True growth cm/yr",
                       ylab="Estimated growth cm/yr",
                       filename = filename,
@@ -108,7 +108,7 @@ build_scatterplot <- function(data, scatterplot_list_item, model_name){
     plot_data <- plot_data %>% na.omit() #Remove NAs
     
     #Build spec object
-    filename <- paste("output/figures/Scatter_", scatterplot_list_item$par_name, "_", model_name, ".png", sep="")
+    filename <- paste("output/figures/Scatter_", scatterplot_list_item$par_name, "_", model_name, ".svg", sep="")
     plot_spec <- list(xlab=paste("True", scatterplot_list_item$par_name, sep=" "),
                       ylab=paste("Est.", scatterplot_list_item$par_name, sep=" "),
                       filename = filename,
@@ -166,7 +166,7 @@ build_beeswarm_boxplot <- function(individual_data, parplot_list_element, model_
   filename <- paste("output/figures/",
                     model_name,
                     parplot_list_element$plot_name,
-                    "_Beeswarm.png", 
+                    "_Beeswarm.svg", 
                     sep="")
   beeswarm_plot <- ggplot_parameter_beeswarm(plot_data, 
                                              parplot_list_element$xlab, 
@@ -179,7 +179,7 @@ build_beeswarm_boxplot <- function(individual_data, parplot_list_element, model_
   filename <- paste("output/figures/",
                     model_name,
                     parplot_list_element$plot_name,
-                    "_Boxplot.png", 
+                    "_Boxplot.svg", 
                     sep="")
   box_plot <- ggplot_parameter_boxplot(plot_data,
                                        parplot_list_element$xlab, 
@@ -239,7 +239,7 @@ plot_obs_and_est_life_history <-function(plotting_data, n_ind, model_name){
     #Produce plot
     file_name <- paste("output/figures/sampled/", model_name,
                        "_Actual_And_Est_Sample_dot_", 
-                       j,".png", sep="")
+                       j,".svg", sep="")
     
     plot <- ggplot_obs_and_est_life_history(data, title = "")
     
@@ -281,13 +281,13 @@ plot_est_life_history <-function(measurement_data, model_name){
   
   #Produce plots
   file_name_size <- paste("output/figures/", model_name,
-                     "_EstimatedSizes.png", sep="")
+                     "_EstimatedSizes.svg", sep="")
   size_plot <- ggplot_est_life_history(size_data, x_lab = "Years", y_lab = "Size",
                                        logAxis="y")
   ggsave(file_name_size, plot=size_plot, width=180, height=100, units="mm")
   
   file_name_growth <- paste("output/figures/", model_name,
-                          "_EstimatedGrowth.png", sep="")
+                          "_EstimatedGrowth.svg", sep="")
   growth_plot <- ggplot_est_life_history(growth_data, x_lab = "Size", y_lab = "Growth",
                                          logAxis="x")
   ggsave(file_name_growth, plot=growth_plot, width=180, height=100, units="mm")
@@ -341,7 +341,7 @@ plot_pair_life_history <-function(pop_pars_est, ind_pars_est, growth_function,
 
   #Produce plot
   file_name <- paste("output/figures/", name,
-                     "_Avg_Life_History.png", sep="")
+                     "_Avg_Life_History.svg", sep="")
   
   plot <- ggplot_pair_life_history(avg_plot_data)
   
@@ -389,14 +389,14 @@ plot_sample_life_history <- function(post_pars,
   
   #Produce plot of sizes over time
   file_name <- paste("output/figures/", name,
-                     "_Sampled_Life_History.png", sep="")
+                     "_Sampled_Life_History.svg", sep="")
   plot <- ggplot_sample_life_history(plot_data)
   ggsave(file_name, plot=plot, width=150, height=150, units="mm")
   
   
   #Produce plot of growth rates by size
   file_name <- paste("output/figures/", name,
-                     "_Sampled_Growth_History.png", sep="")
+                     "_Sampled_Growth_History.svg", sep="")
   if(is.na(S_final[1])){S_final <- rep(max_growth_size, times=length(S_0))}
   plot <- ggplot_sample_growth_trajectories(post_pars, growth_function,  
                                             max_growth_size, min_growth_size, 

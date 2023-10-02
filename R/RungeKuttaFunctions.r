@@ -31,7 +31,7 @@ rk4_est <- function(S_0, growth, pars, step_size, nstep){
     k3 <- growth((runge_kutta_int[i-1] + step_size*k2/2), pars)
     k4 <- growth((runge_kutta_int[i-1] + step_size*k3), pars)
     
-    runge_kutta_int[i] <- runge_kutta_int[i-1] + (step_size/6)*(k1 + 2*k2 + 2*k3 + k4)
+    runge_kutta_int[i] <- runge_kutta_int[i-1] + (1/6)*(k1 + 2*k2 + 2*k3 + k4) * step_size
   }
   return(runge_kutta_int)
 }
@@ -42,7 +42,7 @@ rk4_est <- function(S_0, growth, pars, step_size, nstep){
 #Output plot to file
 save_plot_of_estimates <- function(lines, points, names, colours, pch_vals, 
                                    lty_vals, title, file_name, lwd){
-  png(file_name, width=500, height=500)
+  svglite(file_name, width=5, height=5)
   plot_estimates(lines, points, names, colours, pch_vals, lty_vals, title, lwd)
   dev.off()
 }
@@ -55,19 +55,19 @@ plot_estimates <- function(lines, points, names, colours, pch_vals, lty_vals, ti
        xlab="Time",
        ylab="Size",
        main=title,
-       lwd=lwd,
-       cex.lab = 2,
-       cex.axis = 2,
-       cex.main = 2)
+       lwd=lwd)#,
+       #cex.lab = 2,
+       #cex.axis = 2,
+       #cex.main = 2)
   
   start <- 1
   if(length(lines) > 1){ start <- 2 }
   for(j in start:length(lines)){
-    lines(time, lines[[j]], col=colours[j], lwd=lwd, cex=2)
+    lines(time, lines[[j]], col=colours[j], lwd=lwd)#, cex=2)
   }
   
   for(j in 1:length(points)){
-    points(time, points[[j]], pch=pch_vals[j], col=colours[j], lwd=lwd, cex=2)
+    points(time, points[[j]], pch=pch_vals[j], col=colours[j], lwd=lwd)#, cex=2)
   }
   curve(exp(x), from=0, to=4, col="black", add=TRUE, cex=2)
   legend(x=0.5, y=50, 
@@ -76,8 +76,8 @@ plot_estimates <- function(lines, points, names, colours, pch_vals, lty_vals, ti
          lty=lty_vals,
          lwd=rep(2, times=length(lty_vals)),
          pch=pch_vals,
-         bty="n", 
-         cex=2)
+         bty="n")#, 
+         #cex=2)
   
   return(output_plot)
 }
@@ -103,7 +103,7 @@ plot_results <- function(estimates,
                          lty_list, title, file_name, lwd=1.5)
 }
 
-#Produces side-by-side violin plot of beta samples for each model
+#Produces side-by-side plot of beta samples for each model
 produce_estplot <- function(model_list, model_names){
   #Initialise data frame
   plot_data <- data.frame(val = c(), model = c())
@@ -126,7 +126,7 @@ produce_estplot <- function(model_list, model_names){
   }
 
   #Produce a plot to compare the different estimates of beta
-  png("output/figures/RungeKuttaDemo/BetaPlot.png", width=500, height=500)
+  svglite("output/figures/RungeKuttaDemo/BetaPlot.svg", width=4, height=4)
   build_estplot(means)
   dev.off()
 }
@@ -135,15 +135,13 @@ produce_estplot <- function(model_list, model_names){
 build_estplot <- function(means){
   pch_list <- c(3,4,5)
   col_list <- c("blue", "red", "green4")
+  model <- as.factor(means$model)
   par(mai =  c(bottom=1, left=1, top=1, right=0.5))
-  output_plot <- plot(x=means$model, y=means$val, xlab="Integration Method",
-       ylab="Beta", lwd=0.2, main="Posterior Beta Estimates",
-       cex.lab = 2,
-       cex.axis = 2,
-       cex.main = 2)
+  output_plot <- plot(x=model, y=means$val, xlab="Integration Method",
+       ylab="Beta", lwd=0.5, main="Posterior Beta Estimates")
   for(i in 1:3){
-    points(x=means$model[i], y=means$val[i], pch=pch_list[i], col=col_list[i], 
-           cex=2, lwd=1.1)
+    points(x=model[i], y=means$val[i], pch=pch_list[i], 
+           col=col_list[i], lwd=2)
   }
   abline(a=1, b=0, lty="dashed")
   
@@ -336,15 +334,15 @@ perform_estimation <- function(rstan_file, rstan_data, est_names, est_method, al
   
   if(est_method == "samp"){
     if(1 %in% int_methods){
-      model_euler <- sampling(model, data=rstan_data[[1]], chains=3)
+      model_euler <- sampling(model, data=rstan_data[[1]], chains=3, cores=3)
       model_list$model_euler <- model_euler
     }
     if(2 %in% int_methods){
-      model_midpoint <- sampling(model, data=rstan_data[[2]], chains=3)
+      model_midpoint <- sampling(model, data=rstan_data[[2]], chains=3, cores=3)
       model_list$model_midpoint <- model_midpoint
       }
     if(3 %in% int_methods){
-      model_rk4 <- sampling(model, data=rstan_data[[3]], chains=3)
+      model_rk4 <- sampling(model, data=rstan_data[[3]], chains=3, cores=3)
       model_list$model_rk4 <- model_rk4
       }
     
