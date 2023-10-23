@@ -223,6 +223,9 @@ for(i in 1:length(S_obs)){
   S_obs_err[i] <- add_error(S_obs[i], "Norm") #Implementing error model
 }
 
+#Alternate implementation
+S_obs_err <- S_obs + rnorm(length(S_obs), 0, 0.5)
+
 rstan_data_error <- build_rstan_data(N_obs, S_obs_err, census, census_interval)
 ```
 
@@ -251,13 +254,16 @@ MCMC estimation with measurement error.
 ```{r}
 model_outputs_single$MCMC_Error <- build_output(rstan_file = "stan/Exp_SingleIndividual.stan", 
                                          rstan_data = rstan_data_error,
-                                         est_names = c("RK4"), 
+                                         est_names, 
                                          est_method = "samp",
-                                         int_methods = c(3),
+                                         int_methods = c(1,2,3),
                                          title = "MCMC Estimation With Error",
                                          file_name = "output/figures/RungeKuttaDemo/Single_MCMCIntegration_Error.svg",
-                                         names = c("RK4", "Observed", "Function"),
-                                         colours = c("green4", "black"))
+                                         names = c(est_names, "Function"),
+                                         colours,
+                                         lty_list <- c(1,1,1,1),
+                                         pch_list <- c(3,4,5,NA),
+                                         estplot = TRUE)
 ```
 
 MCMC estimation with measurement error and a bad growth function, namely constant.
