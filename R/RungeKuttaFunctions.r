@@ -42,7 +42,7 @@ rk4_est <- function(S_0, growth, pars, step_size, nstep){
 #Output plot to file
 save_plot_of_estimates <- function(lines, points, names, colours, pch_vals, 
                                    lty_vals, title, file_name, lwd){
-  svglite(file_name, width=5, height=5)
+  svglite(file_name, width=4, height=5)
   plot_estimates(lines, points, names, colours, pch_vals, lty_vals, title, lwd)
   dev.off()
 }
@@ -126,7 +126,7 @@ produce_estplot <- function(model_list, model_names){
   }
 
   #Produce a plot to compare the different estimates of beta
-  svglite("output/figures/RungeKuttaDemo/BetaPlot.svg", width=4, height=4)
+  svglite("output/figures/RungeKuttaDemo/BetaPlot.svg", width=4, height=5)
   build_estplot(means)
   dev.off()
 }
@@ -138,7 +138,7 @@ build_estplot <- function(means){
   model <- as.factor(means$model)
   par(mai =  c(bottom=1, left=1, top=1, right=0.5))
   output_plot <- plot(x=model, y=means$val, xlab="Integration Method",
-       ylab="Beta", lwd=0.5, main="Posterior Beta Estimates")
+       ylab="Beta", lwd=0.5, main="Posterior Beta Estimates", ylim=c(0.95,max(means$val)))
   for(i in 1:3){
     points(x=model[i], y=means$val[i], pch=pch_list[i], 
            col=col_list[i], lwd=2)

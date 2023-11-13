@@ -33,7 +33,7 @@ single_species_controls <- list(
   stan_controls = list(
     iter = 2000,
     chains = 4,
-    cores = 1,
+    cores = 4,
     control = list(max_treedepth = 15)
   ),
   diagnostic_list = diagnostic_list_single_species
@@ -130,7 +130,7 @@ growth_function_pars <- c("beta")
 
 sim_spec <- function(n) {
   tibble(
-    beta = exp(rnorm(n, mean=-2, sd=0.1))
+    beta = exp(rnorm(n, mean=-4, sd=0.3))
   )
 }
 

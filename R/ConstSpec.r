@@ -129,7 +129,7 @@ growth_function_pars <- c("beta")
 
 sim_spec <- function(n) {
   tibble(
-    beta = exp(rnorm(n, mean=-1, sd=1))
+    beta = exp(rnorm(n, mean=-2, sd=1))
   )
 }
 

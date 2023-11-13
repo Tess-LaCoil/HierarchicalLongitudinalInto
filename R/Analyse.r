@@ -128,9 +128,9 @@ plot_scatterplot <- function(plot_data, scatterplot_list_item, plot_spec){
 ggplot_scatterplot <- function(plot_data, plot_spec){
   plot <- ggplot(data=plot_data, aes(x,y, col=Model, alpha=Model))+
     geom_point(aes(x=x, y=y, shape=Model), size=2) +
-    scale_shape_manual(values = c(16, 3)) +
-    scale_color_manual(values = c("#4A4A4A", "green4")) +
-    scale_alpha_discrete(range = c(0.2, 1)) +
+    scale_shape_manual(values = c(3, 16)) +
+    scale_color_manual(values = c("green4", "#4A4A4A")) +
+    scale_alpha_discrete(range = c(1, 0.2)) +
     labs(x = plot_spec$xlab, y = plot_spec$ylab) +
     geom_abline(intercept=0, slope=1, linetype="dashed") +
     theme_classic() +
