@@ -129,7 +129,8 @@ build_sim_data <- function(error_type, growth_function, growth_function_pars,
     #We start at a random size +1cm in order to ensure a minimum size of 1
     runge_kutta_int <- rk4_est(S_0 = (sim_data$S_0[((i-1)*sim_pars$N_obs+1)]),
                                growth = growth_function,
-                               pars = sim_data[i,growth_function_pars],
+                               pars = sim_data[((i-1)*sim_pars$census_interval + 1),
+                                               growth_function_pars],
                                sim_pars$step_size, N_step)
     
     #Take a subset of the estimates which are the observations
