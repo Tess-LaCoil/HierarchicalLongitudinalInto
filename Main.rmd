@@ -159,9 +159,9 @@ source("R/RungeKuttaFunctions.r")
 
 Set parameters and initial condition
 ```{r}
-beta <- 1
-S_0 <- 1
-step_size <- 1
+beta <- 1.0
+S_0 <- 1.0
+step_size <- 1.0
 n_step <- 5
 time <- c(0, 1, 2, 3, 4)
 
@@ -278,6 +278,49 @@ model_outputs_single$MCMC_Error_const <- build_output(rstan_file = "stan/ConstGr
                                          names = c("RK4", "Observed", "Function"),
                                          colours = c("green4", "black"))
 ```
+
+To investigate the behaviour fully we repeat this process 1000 times.
+```{r}
+size_2_est <- tibble()
+beta_est <- tibble()
+model <- stan_model(file="stan/Exp_SingleIndividual.stan")
+
+for(i in 1:200){
+  #Add error to analytic solution
+  S_obs_err <- abs(S_obs + rnorm(length(S_obs), 0, 0.5))
+  rstan_data_error <- build_rstan_data(N_obs, S_obs_err, census, census_interval)
+  
+  #Iterate through the integration methods getting estimates from each one.
+  for(j in 1:3){
+    fit <- sampling(model, data=rstan_data_error[[j]], 
+                    iter=2000,
+                    chains=4,
+                    cores=4)
+    
+    est_data <- rstan::extract(fit, permuted=TRUE)
+    size_temp <- tibble(int_method = j, iter = i, size_obs = S_obs[2],
+                        size_est = apply(est_data$S_hat, 2, mean)[2])
+    beta_temp <- tibble(int_method = j, iter = i, 
+                        beta = mean(est_data[["ind_beta"]]))
+    
+    size_2_est <- rbind(size_2_est, size_temp)
+    beta_est <- rbind(beta_est, beta_temp)
+  }
+}
+
+boxplot(beta_est$beta ~ beta_est$int_method, xlab = "Integration Method", ylab="Beta",
+        xaxt = "n", col=c("blue3", "red", "green4"), main="Estimates of Beta")
+abline(h=1, col="grey18")
+axis(1, at = c(1,2,3), labels = c("Euler", "Midpoint", "RK4"))
+
+boxplot(size_2_est$size_est ~ size_2_est$int_method, xlab = "Integration Method", ylab="S(2)",
+        xaxt = "n", col=c("blue3", "red", "green4"), main="Estimates of S(2)")
+abline(h=S_obs[2], col="grey18")
+axis(1, at = c(1,2,3), labels = c("Euler", "Midpoint", "RK4"))
+
+
+```
+
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                      Multi-individual demonstration

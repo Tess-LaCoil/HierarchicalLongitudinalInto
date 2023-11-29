@@ -1,31 +1,44 @@
 //Growth function
 functions{
   //Growth function for use with Runge-Kutta method
-  real growth(real y, vector ind_pars[1]){
-    return ind_pars[1] * y;
+  real growth(real y, real beta){
+    return beta * y;
   }
   
-  real midpoint(real y, vector ind_pars[1], real interval){
-    real mid;
+  real euler(real y, real beta, real interval){
+    real y_hat;
     
-    mid = y + 0.5 * interval * growth(y, beta);
-    return growth(mid, ind_pars);
+    y_hat = y + growth(y, beta)*interval;
+    
+    return y_hat;
   }
-  
-  real rk4(real y, vector ind_pars[1], real interval){
+
+  real midpoint(real y, real beta, real interval){
+    real mid;
+    real y_hat;
+
+    mid = y + 0.5 * interval * growth(y, beta);
+    
+    y_hat = y + growth(mid, beta) * interval;
+    
+    return y_hat;
+  }
+
+  real rk4(real y, real beta, real interval){
     real k1;
     real k2;
     real k3;
     real k4;
-    real g_est;
+    real y_hat;
+
+    k1 = growth(y, beta);
+    k2 = growth(y+interval*k1/2.0, beta);
+    k3 = growth(y+interval*k2/2.0, beta);
+    k4 = growth(y+interval*k3, beta);
     
-    k1 = growth(y, ind_pars);
-    k2 = growth(y+interval*k1/2.0, ind_pars);
-    k3 = growth(y+interval*k2/2.0, ind_pars);
-    k4 = growth(y+interval*k3, ind_pars);
-    g_est = (1.0/6.0) * (k1 + 2.0*k2 + 2.0*k3 + k4);
-    
-    return g_est;
+    y_hat = y + (1.0/6.0) * (k1 + 2.0*k2 + 2.0*k3 + k4) * interval;
+
+    return y_hat;
   }
 }
 
@@ -52,33 +65,24 @@ parameters {
 // The model to be estimated. 
 model {
   real S_hat[N_obs];
-  real G_hat[N_obs];
-  vector ind_pars[1];
   
   for(i in 1:N_obs){
-    ind_pars[1] = ind_beta;
-    
     if(census[i]==1){//Fits the first size
       S_hat[i] = ind_S_0;
     }
     
-    if(int_method == 1){ //Euler method
-      G_hat[i] = growth(S_hat[i], ind_pars);
+    if(i < N_obs){ //Avoid writing outside the bounds of the data
+      if(int_method == 1){ //Euler method
+        S_hat[i+1] = euler(S_hat[i], ind_beta, census_interval[i]);
+  
+      } else if(int_method == 2){ //Midpoint method
+        S_hat[i+1] = midpoint(S_hat[i], ind_beta, census_interval[i]);
                         
-    } else if(int_method == 2){ //Midpoint method
-      G_hat[i] = midpoint(S_hat[i], 
-                          ind_pars,
-                          census_interval[i]);
-                        
-    } else if(int_method == 3){ //RK4 method
-      G_hat[i] = rk4(S_hat[i], 
-                      ind_pars,
-                      census_interval[i]);
+      } else if(int_method == 3){ //RK4 method
+        S_hat[i+1] = rk4(S_hat[i], ind_beta, census_interval[i]);
+        
+      }
     }
-      
-    if(i < N_obs){
-      S_hat[i+1] = S_hat[i] + G_hat[i]*census_interval[i];
-    } 
   }
   
   //Likelihood
@@ -95,32 +99,23 @@ model {
 
 generated quantities{
   real S_hat[N_obs];
-  real G_hat[N_obs];
-  vector ind_pars[1];
   
   for(i in 1:N_obs){
-    ind_pars[1] = ind_beta;
-    
     if(census[i]==1){//Fits the first size
       S_hat[i] = ind_S_0;
     }
     
-    if(int_method == 1){ //Euler method
-      G_hat[i] = growth(S_hat[i], ind_pars);
+    if(i < N_obs){ //Avoid writing outside the bounds of the data
+      if(int_method == 1){ //Euler method
+        S_hat[i+1] = euler(S_hat[i], ind_beta, census_interval[i]);
+  
+      } else if(int_method == 2){ //Midpoint method
+        S_hat[i+1] = midpoint(S_hat[i], ind_beta, census_interval[i]);
                         
-    } else if(int_method == 2){ //Midpoint method
-      G_hat[i] = midpoint(S_hat[i], 
-                          ind_pars,
-                          census_interval[i]);
-                        
-    } else if(int_method == 3){ //RK4 method
-      G_hat[i] = rk4(S_hat[i], 
-                      ind_pars,
-                      census_interval[i]);
+      } else if(int_method == 3){ //RK4 method
+        S_hat[i+1] = rk4(S_hat[i], ind_beta, census_interval[i]);
+        
+      }
     }
-      
-    if(i < N_obs){
-      S_hat[i+1] = S_hat[i] + G_hat[i]*census_interval[i];
-    } 
   }
 }
