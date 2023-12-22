@@ -475,9 +475,8 @@ if(run_model_BCI_example){
   source("R/CanhamSpec.r", local=TRUE)
   source("R/RunModels.r", local=TRUE)
 
-  dataset <- readRDS("data/SingleSpecies_RStan_PPanamense.rds")
+  dataset <- readRDS("data/gar2in_rstan_data.rds")
   
-  dataset$int_method <- 3
   fit <- list()
   
   fit[[3]] <- build_rstan_model(stan_controls = single_species_controls$stan_controls, 
@@ -486,14 +485,14 @@ if(run_model_BCI_example){
                                 est_method = "samp",
                                 dataset) #Index 3 used to fit into the existing functions
   
-  filename <- paste(single_species_controls$fit_save_path, "PPanamense", sep="_")
+  filename <- paste(single_species_controls$fit_save_path, "GRecondita", sep="_")
   filename <- paste(filename, ".rds", sep="")
   saveRDS(fit, file=filename) #Output to file
   
   #Wrangle file names for diagnostic plots
   diag_list <- single_species_controls$diagnostic_list
   for(j in 1:length(diag_list)){
-    diag_list[[j]]$name <- paste(diag_list[[j]]$name, "PPanamense", sep="_")
+    diag_list[[j]]$name <- paste(diag_list[[j]]$name, "GRecondita", sep="_")
   }
   #Plot diagnostics
   plot_all_diagnostics(fit[[3]], int_method = 3, 
@@ -501,6 +500,7 @@ if(run_model_BCI_example){
                        inc_warmup = FALSE)
   
   fit <- fit[[3]] #get rid of other elements
+  saveRDS(fit, object="output/data/Single_Species_Fit_Canham_GRecondita.rds")
   
   #Further diagnostics
   #Initialise data frame for Rhat diagnostics.
@@ -527,9 +527,8 @@ extract_analyse <- TRUE
 
 if(extract_analyse){
   #Load in files
-  fit <- readRDS("output/data/Single_Species_Fit_Canham_PPanamense.rds")
-  fit <- fit[[3]] #get rid of other elements
-  dataset <- readRDS("output/data/SingleSpecies_RStan_PPanamense.rds")
+  fit <- readRDS("output/data/Single_Species_Fit_Canham_GRecondita.rds")
+  dataset <- readRDS("output/data/SingleSpecies_RStan_GRecondita.rds")
   dataset$int_method <- 3
   
   source("R/EstimateWrangling.r", local=TRUE)
@@ -607,11 +606,11 @@ if(extract_analyse){
   save_data <- list(individual_data = individual_data,
                     measurement_data = measurement_data,
                     species_data = species_data)
-  save_filename <- "output/data/PPanamense_Sampled_Canham.rds"
+  save_filename <- "output/data/GRecondita_Sampled_Canham.rds"
   saveRDS(save_data, file=save_filename)
   
   #Load if needed
-  save_data <- readRDS("output/data/PPanamense_Sampled_Canham.rds")
+  save_data <- readRDS("output/data/GRecondita_Sampled_Canham.rds")
   individual_data <- save_data$individual_data
   measurement_data <- save_data$measurement_data
   species_data <- save_data$species_data
@@ -652,7 +651,7 @@ if(extract_analyse){
   post_pars <- rbind(post_pars, temp)
   #Plot the sampled growth function histories
   plot_sample_life_history(post_pars, growth_function, 
-                           name = "PPanamense_Posterior_Samples", 
+                           name = "GRecondita_Posterior_Samples", 
                            n_ind, S_0, step_size=step_size, lifespan=lifespan)
   
   #
@@ -663,12 +662,12 @@ if(extract_analyse){
   
   #Plot the growth function histories starting at 3cm
   plot_sample_life_history(growth_par_ests, growth_function, 
-                           name = "PPanamense_EstimatedPars", 
+                           name = "GRecondita_EstimatedPars", 
                            n_ind, S_0, step_size=step_size, lifespan=lifespan)
   
   #Plot the growth function histories starting at S_0
   plot_sample_life_history(growth_par_ests, growth_function, 
-                           name = "PPanamense_From_S_0", 
+                           name = "GRecondita_From_S_0", 
                            n_ind, 
                            S_0 = individual_data$canham_S_0_hat, 
                            S_final = individual_data$S_final,
@@ -677,7 +676,7 @@ if(extract_analyse){
                            max_growth_size = 100)
   
   plot_sample_life_history(growth_par_ests, growth_function, 
-                           name = "PPanamense_Observed", 
+                           name = "GRecondita_Observed", 
                            n_ind, 
                            S_0 = individual_data$canham_S_0_hat, 
                            S_final = individual_data$S_final,
