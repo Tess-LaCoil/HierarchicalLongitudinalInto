@@ -561,9 +561,20 @@ if(extract_analyse){
   for(i in ind_pars){
     individual_data[[ind_pars_names[which(ind_pars == i)]]] <- apply(est_data[[i]], 2, mean)
   }
+  
+  #Hist/boxplot combos
+  hist_names <- c("Max growth - g_max", "Size at max growth - S_max", "Spread - k")
   for(i in 1:length(growth_par_names)){
-    hist(individual_data[[growth_par_names[i]]], xlab=plot_par_names[i], 
-         col="lightblue", main="", breaks=10)
+    layout(mat = matrix(c(1,2),2,1, byrow=TRUE),  height = c(2,8))
+    
+    par(mar=c(0, 3.1, 1.1, 2.1))
+    boxplot(individual_data[[growth_par_names[i]]] , horizontal=TRUE ,
+            xaxt="n" ,
+            col="palegreen3" , frame=F)
+    par(mar=c(4, 3.1, 1.1, 2.1))
+    hist(individual_data[[growth_par_names[i]]] , breaks=10 ,
+         col="palegreen" , main="" ,
+         xlab=hist_names[i])
   }
   
   #Get final size for each individual
