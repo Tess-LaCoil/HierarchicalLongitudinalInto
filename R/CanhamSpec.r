@@ -177,14 +177,27 @@ growth_function <- function(x, pars){
 
 growth_function_pars <- c("g_max", "s_max", "k")
 
-sim_spec <- function(n){
-  tibble(
-    g_max = exp(rnorm(n, mean=-0.5, sd=0.1)), #exp(-0.5), 
-    s_max = exp(rnorm(n, mean=1.8, sd=0.1)), #exp(1.8),
-    k = exp(rnorm(n, mean=log(0.75), sd=0.1)) 
-  )
-}
+sp_true_vals <- c(-1.763568, 0.4474367, #Has sqrt of cov matrix vals for sd
+                  2.179274, 0.1878996, 
+                  -0.0727632, 0.3591007)
 
+#Mean and covariance data taken from G. recondita fitted model
+par_cov_matrix <- matrix(
+  data = c(0.200199586, 0.003709906, -0.06667686, 
+           0.003709906, 0.035306251, -0.01538283, 
+           -0.066676863 , -0.015382829, 0.12895330),
+  nrow=3, ncol=3
+)
+
+par_mean_vec <- c(-1.76867118,  2.17665912, -0.05967696)
+
+sim_spec <- function(n){
+  sample_of_pars <- exp(data.frame(rmnorm(n, mean=par_mean_vec, varcov= par_cov_matrix)))
+  
+  names(sample_of_pars) <- c("g_max", "s_max", "k")
+  
+  return(sample_of_pars)
+}
 
 #Define the growth function for plotting
 growth_function_plot <- function(x, pars=list(canham_max_growth_hat, 

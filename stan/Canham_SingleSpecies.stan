@@ -1,38 +1,74 @@
 //Growth function
 functions{
   //Growth function for use with Runge-Kutta method
-  real growth(real y, vector ind_pars[3]){
-    return ind_pars[1] *
-    exp(-0.5 * pow(log(y / ind_pars[2]) / ind_pars[3], 2));
+  real growth(real y, real g_max, real S_max, real k){
+    return g_max * exp(-0.5 * pow(log(y / S_max) / k, 2));
+  }
+  
+  real euler(real y, real g_max, real S_max, real k, real interval){
+    real y_hat;
+    
+    y_hat = y + growth(y, g_max, S_max, k)*interval;
+    
+    return y_hat;
   }
 
-  real midpoint(real y, vector ind_pars[3], real interval){
+  real midpoint(real y, real g_max, real S_max, real k, real interval){
     real mid;
+    real y_hat;
 
-    mid = y + 0.5 * interval * growth(y, ind_pars);
-    return growth(mid, ind_pars);
+    mid = y + 0.5 * interval * growth(y, g_max, S_max, k);
+    
+    y_hat = y + growth(mid, g_max, S_max, k) * interval;
+    
+    return y_hat;
   }
 
-  real rk4(real y, vector ind_pars[3], real interval){
+  real rk4_step(real y, real g_max, real S_max, real k, real interval){
     real k1;
     real k2;
     real k3;
     real k4;
-    real g_est;
+    real y_hat;
 
-    k1 = growth(y, ind_pars);
-    k2 = growth(y+interval*k1/2.0, ind_pars);
-    k3 = growth(y+interval*k2/2.0, ind_pars);
-    k4 = growth(y+interval*k3, ind_pars);
-    g_est = (1.0/6.0) * (k1 + 2.0*k2 + 2.0*k3 + k4);
+    k1 = growth(y, g_max, S_max, k);
+    k2 = growth(y+interval*k1/2.0, g_max, S_max, k);
+    k3 = growth(y+interval*k2/2.0, g_max, S_max, k);
+    k4 = growth(y+interval*k3, g_max, S_max, k);
+    
+    y_hat = y + (1.0/6.0) * (k1 + 2.0*k2 + 2.0*k3 + k4) * interval;
 
-    return g_est;
+    return y_hat;
+  }
+  
+  real rk4(real y, real g_max, real S_max, real k, real interval, real step_size){
+    int steps;
+    real duration;
+    real y_hat;
+    real step_size_temp;
+    
+    duration = 0;
+    y_hat = y;
+    
+    while(duration < interval){
+      //Determine the relevant step size
+      step_size_temp = min([step_size, interval-duration]);
+      
+      //Get next size estimate
+      y_hat = rk4_step(y_hat, g_max, S_max, k, step_size_temp);
+      
+      //Increment observed duration
+      duration = duration + step_size_temp;
+    }
+    
+    return y_hat;
   }
 }
 
 // Data structure
 data {
   int int_method;
+  real step_size;
   int N_obs;
   int N_ind;
   real S_obs[N_obs];
@@ -66,34 +102,31 @@ parameters {
 // The model to be estimated.
 model {
   real S_hat[N_obs];
-  real G_hat[N_obs];
-  vector ind_pars[3]; // (g_max, S_max, K)
 
   for(i in 1:N_obs){
-    //get parameters
-    ind_pars[1] = ind_max_growth[treeid_factor[i]];
-    ind_pars[2] = ind_diameter_at_max_growth[treeid_factor[i]];
-    ind_pars[3] = ind_K[treeid_factor[i]];
-    
     if(census[i]==1){//Fits the first size
       S_hat[i] = ind_S_0[treeid_factor[i]];
     }
     
     //Estimate growth
-    if(int_method == 1){ //Euler method
-        G_hat[i] = growth(S_hat[i], ind_pars);
-
-      } else if(int_method == 2){ //Midpoint method
-        G_hat[i] = midpoint(S_hat[i] ind_pars);
-      } else if(int_method == 3){ //RK4 method
-        G_hat[i] = rk4(S_hat[i], ind_pars,
-                        census_interval[i]);
-      }
-    
     //Assign next size
     if(i < N_obs){ //Avoid writing outside the bounds of the data
-      if(treeid_factor[i+1]==treeid_factor[i]){ //Don't overwrite next individual
-        S_hat[i+1] = S_hat[i] + G_hat[i]*census_interval[i];
+      if(treeid_factor[i+1]==treeid_factor[i]){
+        if(int_method == 1){ //Euler method
+          S_hat[i+1] = euler(S_hat[i], ind_max_growth[treeid_factor[i]], 
+            ind_diameter_at_max_growth[treeid_factor[i]], 
+            ind_K[treeid_factor[i]], census_interval[i]);
+    
+        } else if(int_method == 2){ //Midpoint method
+          S_hat[i+1] = midpoint(S_hat[i], ind_max_growth[treeid_factor[i]], 
+            ind_diameter_at_max_growth[treeid_factor[i]], 
+            ind_K[treeid_factor[i]], census_interval[i]);
+                          
+        } else if(int_method == 3){ //RK4 method
+          S_hat[i+1] = rk4(S_hat[i], ind_max_growth[treeid_factor[i]], 
+            ind_diameter_at_max_growth[treeid_factor[i]], 
+            ind_K[treeid_factor[i]], census_interval[i], step_size);
+        }
       }
     }
   }
@@ -110,48 +143,57 @@ model {
   ind_K ~lognormal(species_K_mean, species_K_sd);
 
   //Species level
-  species_max_growth_mean ~normal(0, 2);
-  species_max_growth_sd ~cauchy(4, 2);
-  species_diameter_at_max_growth_mean ~normal(5, 1);
-  species_diameter_at_max_growth_sd ~cauchy(4, 2);
-  species_K_mean ~normal(-0.6694307, 1);
-  species_K_sd ~cauchy(0.1, 1);
+  species_max_growth_mean ~normal(0, 1);
+  species_max_growth_sd ~cauchy(0, 1);
+  species_diameter_at_max_growth_mean ~normal(0, 1);
+  species_diameter_at_max_growth_sd ~cauchy(0, 1);
+  species_K_mean ~normal(0, 1);
+  species_K_sd ~cauchy(0, 1);
 
   //Global level
-  global_error_sigma ~cauchy(1, 5);
+  global_error_sigma ~cauchy(0, 2);
 }
 
 generated quantities{
   real S_hat[N_obs];
   real G_hat[N_obs];
-  vector ind_pars[3]; // (g_max, S_max, K)
-
+  
   for(i in 1:N_obs){
-    //get parameters
-    ind_pars[1] = ind_max_growth[treeid_factor[i]];
-    ind_pars[2] = ind_diameter_at_max_growth[treeid_factor[i]];
-    ind_pars[3] = ind_K[treeid_factor[i]];
-    
     if(census[i]==1){//Fits the first size
       S_hat[i] = ind_S_0[treeid_factor[i]];
     }
     
     //Estimate growth
-    if(int_method == 1){ //Euler method
-        G_hat[i] = growth(S_hat[i], ind_pars);
-
-      } else if(int_method == 2){ //Midpoint method
-        G_hat[i] = midpoint(S_hat[i] ind_pars);
-      } else if(int_method == 3){ //RK4 method
-        G_hat[i] = rk4(S_hat[i], ind_pars,
-                        census_interval[i]);
-      }
-    
     //Assign next size
     if(i < N_obs){ //Avoid writing outside the bounds of the data
-      if(treeid_factor[i+1]==treeid_factor[i]){ //Don't overwrite next individual
-        S_hat[i+1] = S_hat[i] + G_hat[i]*census_interval[i];
+      if(treeid_factor[i+1]==treeid_factor[i]){
+        if(int_method == 1){ //Euler method
+          S_hat[i+1] = euler(S_hat[i], ind_max_growth[treeid_factor[i]], 
+            ind_diameter_at_max_growth[treeid_factor[i]], 
+            ind_K[treeid_factor[i]], census_interval[i]);
+    
+        } else if(int_method == 2){ //Midpoint method
+          S_hat[i+1] = midpoint(S_hat[i], ind_max_growth[treeid_factor[i]], 
+            ind_diameter_at_max_growth[treeid_factor[i]], 
+            ind_K[treeid_factor[i]], census_interval[i]);
+                          
+        } else if(int_method == 3){ //RK4 method
+          S_hat[i+1] = rk4(S_hat[i], ind_max_growth[treeid_factor[i]], 
+            ind_diameter_at_max_growth[treeid_factor[i]], 
+            ind_K[treeid_factor[i]], census_interval[i], step_size);
+        }
+        
+        G_hat[i] = S_hat[i+1] - S_hat[i];
+        
+      } else { #Uses Euler to predict G_hat for final size
+        G_hat[i] = growth(S_hat[i], ind_max_growth[treeid_factor[i]], 
+            ind_diameter_at_max_growth[treeid_factor[i]], 
+            ind_K[treeid_factor[i]]) * census_interval[i];
       }
+    } else {
+      G_hat[i] = growth(S_hat[i], ind_max_growth[treeid_factor[i]], 
+            ind_diameter_at_max_growth[treeid_factor[i]], 
+            ind_K[treeid_factor[i]]) * census_interval[i];
     }
   }
 }

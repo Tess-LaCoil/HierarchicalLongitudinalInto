@@ -32,6 +32,7 @@ library(parallel)
 library(latex2exp)
 library(grid)
 library(svglite)
+library(mnormt)
 ```
 
 Now we are ready to start doing things.
@@ -68,7 +69,8 @@ sim_pars <- list(N_ind = 20, #Parameters controlling simulation
                  S0_sd = 1,
                  step_size = 0.1,
                  N_obs = 5, #Observations per individual
-                 census_interval = 5)
+                 census_interval = 5, 
+                 model = "canham")
 
 sim_pars$time <- seq(from=0, to=(sim_pars$N_obs*sim_pars$census_interval -1), 
                      by=sim_pars$census_interval)
@@ -91,7 +93,7 @@ data_construction_controls <- list(
 build_datasets <- TRUE
 ```
 
-We are ready to build the first multi-species data sets. These are produced with error added, in a later section we will look at observations without error to investigate integration methods.
+We are ready to build the first multi-individual data sets. These are produced with error added, in a later section we will look at observations without error to investigate integration methods. Datasets built with the Canham function will include a step size parameter which is used to control sub-steps of the Runge-Kutta 4th order integration.
 ```{r}
 if(build_datasets){
   source("R/BuildData.r", local=TRUE)
@@ -115,7 +117,8 @@ sim_pars <- list(N_ind = 10, #Parameters controlling simulation
                  S0_sd = 1,
                  step_size = 0.1,
                  N_obs = 5, #Observations per individual
-                 census_interval = 5)
+                 census_interval = 5,
+                 model = "const")
 sim_pars$time <- seq(from=0, to=(sim_pars$N_obs*sim_pars$census_interval -1), 
                      by=sim_pars$census_interval)
 
@@ -132,7 +135,7 @@ data_construction_controls <- list(
   error_type="Norm"
 )
 
-build_datasets <- FALSE
+build_datasets <- TRUE
 
 for(i in c(10, 100, 1000, 10000)){
   data_construction_controls$sim_pars$N_ind <- i
@@ -266,26 +269,15 @@ model_outputs_single$MCMC_Error <- build_output(rstan_file = "stan/Exp_SingleInd
                                          estplot = TRUE)
 ```
 
-MCMC estimation with measurement error and a bad growth function, namely constant.
+To investigate the numerical integration behaviour fully we repeat the error simulation and model fitting. 
+Warning: The following block will take a long time to run! You can reduce the number of iterations required using the n_iter argument.
 ```{r}
-model_outputs_single$MCMC_Error_const <- build_output(rstan_file = "stan/ConstGrowth_SingleIndividual.stan", 
-                                         rstan_data = rstan_data_error,
-                                         est_names = c("RK4"), 
-                                         est_method = "samp",
-                                         int_methods = 3,
-                                         title = "Constant Growth",
-                                         file_name = "output/figures/RungeKuttaDemo/Single_MCMCIntegration_Error_const.svg",
-                                         names = c("RK4", "Observed", "Function"),
-                                         colours = c("green4", "black"))
-```
-
-To investigate the behaviour fully we repeat this process 1000 times.
-```{r}
+n_iter = 100
 size_2_est <- tibble()
 beta_est <- tibble()
 model <- stan_model(file="stan/Exp_SingleIndividual.stan")
 
-for(i in 1:200){
+for(i in 1:n_iter){
   #Add error to analytic solution
   S_obs_err <- abs(S_obs + rnorm(length(S_obs), 0, 0.5))
   rstan_data_error <- build_rstan_data(N_obs, S_obs_err, census, census_interval)
@@ -321,6 +313,225 @@ axis(1, at = c(1,2,3), labels = c("Euler", "Midpoint", "RK4"))
 
 ```
 
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+                        BCI data demonstration
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In this section we will fit a Canham growth model to a sample of individuals from Garcinia recondita in the Barro Colorado Island forest plot data:
+Condit, R., S. Lao, R. Pérez, S. Aguilar, R.B. Foster, S.P. Hubbell. (2019). Complete data from the Barro Colorado 50-ha plot: 423617 trees, 35 years, v3, DataONE Dash, Dataset, https://doi.org/10.15146/5xcp-0d46.
+
+A simple random sample without replacement was used to select 400 individuals with 6 observations. The RStan data file has been constructed and is stored as gar2in_rstan_data.rds in the data folder.
+
+```{r}
+run_model_BCI_example <- TRUE
+
+if(run_model_BCI_example){
+  source("R/CanhamSpec.r", local=TRUE)
+  source("R/RunModels.r", local=TRUE)
+
+  dataset <- readRDS("data/gar2in_rstan_data.rds")
+  
+  fit <- list()
+  
+  fit[[3]] <- build_rstan_model(stan_controls = single_species_controls$stan_controls, 
+                                model_name = single_species_controls$model_name,
+                                stan_file_name = single_species_controls$stan_file_path,
+                                est_method = "samp",
+                                dataset) #Index 3 used to fit into the existing functions
+  
+  filename <- paste(single_species_controls$fit_save_path, "GRecondita", sep="_")
+  filename <- paste(filename, ".rds", sep="")
+  saveRDS(fit, file=filename) #Output to file
+  
+  #Wrangle file names for diagnostic plots
+  diag_list <- single_species_controls$diagnostic_list
+  for(j in 1:length(diag_list)){
+    diag_list[[j]]$name <- paste(diag_list[[j]]$name, "GRecondita", sep="_")
+  }
+  #Plot diagnostics
+  plot_all_diagnostics(fit[[3]], int_method = 3, 
+                       diag_list,
+                       inc_warmup = FALSE)
+  
+  fit <- fit[[3]] #get rid of other elements in list
+  saveRDS(fit, object="output/data/Single_Species_Fit_Canham_GRecondita.rds")
+  
+  #Further diagnostics
+  #Initialise data frame for Rhat diagnostics.
+  Rhat_data <- data.frame(row.names=names(fit@sim[["samples"]][[1]]))
+  #Extract values to data frame
+  for(i in 1:length(fit@sim[["samples"]])){
+    for(j in 1:length(fit@sim[["samples"]][[1]])){
+      Rhat_data[j,i] <- Rhat(fit@sim[["samples"]][[i]][[j]])
+    }
+  }
+  #Get a histogram of all the RHats
+  histvec <- c()
+  for(i in 1:ncol(Rhat_data)){ histvec <- c(histvec, Rhat_data[,i]) }
+  hist(histvec, col="lightblue", main="Histogram of Rhats for all chains", xlab="Rhat")
+  length(which(histvec > 1.05))
+  
+  rm(fit)
+}
+```
+
+Once the model has been fit and the diagnostics do not indicate problems, we can extract the fitted values and analyse them.
+```{r}
+extract_analyse <- TRUE
+
+if(extract_analyse){
+  #Load in files
+  fit <- readRDS("output/data/Single_Species_Fit_Canham_GRecondita.rds")
+  dataset <- readRDS("data/gar2in_rstan_data.rds")
+  dataset$int_method <- 3
+  
+  source("R/EstimateWrangling.r", local=TRUE)
+  source("R/Analyse.r", local=TRUE)
+  source("R/CanhamSpec.r", local=TRUE)
+  
+  #Sample extraction and analysis
+  #Building data frames
+  measurement_data <- tibble(treeid_factor = dataset$treeid_factor,
+                             S_obs = dataset$S_obs,
+                             census = dataset$census,
+                             census_interval = dataset$census_interval)
+  measurement_data <- measurement_data %>% 
+    group_by(treeid_factor) %>%
+    mutate(treeid = dataset$tree_id_vec[treeid_factor],
+           time=cumsum(census_interval)) %>%
+    ungroup()
+  
+  individual_data <- tibble(treeid = dataset$tree_id_vec,
+                            treeid_factor = 1:400)
+  
+  #Extract samples
+  est_data <- rstan::extract(fit, permuted=TRUE)
+  
+  #Measurement-level data
+  measurement_data$S_hat <- apply(est_data$S_hat, 2, mean)
+  measurement_data$G_hat <- apply(est_data$G_hat, 2, mean)
+  
+  #Individual-level data
+  for(i in ind_pars){
+    individual_data[[ind_pars_names[which(ind_pars == i)]]] <- apply(est_data[[i]], 2, mean)
+  }
+  
+  #Hist/boxplot combos
+  hist_names <- c("Max growth - g_max", "Size at max growth - S_max", "Spread - k")
+  for(i in 1:length(growth_par_names)){
+    layout(mat = matrix(c(1,2),2,1, byrow=TRUE),  height = c(2,8))
+    
+    par(mar=c(0, 3.1, 1.1, 2.1))
+    boxplot(individual_data[[growth_par_names[i]]] , horizontal=TRUE ,
+            xaxt="n" ,
+            col="palegreen3" , frame=F)
+    par(mar=c(4, 3.1, 1.1, 2.1))
+    hist(individual_data[[growth_par_names[i]]] , breaks=10 ,
+         col="palegreen" , main="" ,
+         xlab=hist_names[i])
+  }
+  
+  #Get final size for each individual
+  temp <- measurement_data %>%
+    group_by(treeid) %>%
+    mutate(S_final = max(S_hat)) %>%
+    distinct(treeid, S_final) %>%
+    ungroup() %>%
+    select(S_final)
+
+  individual_data$S_final <- temp$S_final
+  
+  #Compare individual-level parameters
+  pairs(~individual_data$canham_max_growth_hat + 
+          individual_data$canham_diameter_at_max_growth_hat +
+          individual_data$canham_K_hat,
+        labels = c("g_max", "S_max", "K"))
+  
+  #Large-scale plot of single pair
+  pairplot <- ggplot(data=individual_data, aes(x,y))+
+    geom_point(aes(x=canham_max_growth_hat, y=canham_K_hat), 
+               size=2, color="green4", alpha=0.6) +
+    labs(x = "g_max", y = "k") +
+    theme_classic()
+  
+  #Species-level data
+  species_par_est <- c()
+  for(i in 1:length(sp_pars)){ #Extract estimates
+    species_par_est[i] <- mean(est_data[[sp_pars[i]]])
+  }
+  species_data <- tibble(species_par_est, sp_pars_names, Lower=c(), Upper=c())
+  #Build CIs
+  hyperpar_CI <- build_par_CI(est_data, sp_pars, sp_pars_names)
+  for(i in 1:length(hyperpar_CI)){
+    species_data$Lower[i] <- hyperpar_CI[[i]][[1]]
+    species_data$Upper[i] <- hyperpar_CI[[i]][[2]]
+  }
+  
+  #Save data to file
+  save_data <- list(individual_data = individual_data,
+                    measurement_data = measurement_data,
+                    species_data = species_data)
+  save_filename <- "output/data/GRecondita_Sampled_Canham.rds"
+  saveRDS(save_data, file=save_filename)
+  
+  #Load if needed
+  save_data <- readRDS("output/data/GRecondita_Sampled_Canham.rds")
+  individual_data <- save_data$individual_data
+  measurement_data <- save_data$measurement_data
+  species_data <- save_data$species_data
+  
+  #Plots of individual sizes over time, estimated and observed
+  n_ind <- 400 #Number of plots to do
+  plot_obs_and_est_life_history(measurement_data, n_ind, "Canham")
+  
+  #Plots of sizes over time, and growth over size, for all individuals
+  plot_est_life_history(measurement_data, model_name="Canham")
+  
+  #Plot of individual size over time based on percentiles of individual parameters
+  ind_pars_est <- c(g_max <- quantile(individual_data$canham_max_growth_hat, 0.5),
+                       S_max <- quantile(individual_data$canham_diameter_at_max_growth_hat, 0.5),
+                       k <- quantile(individual_data$canham_K_hat, 0.5))
+  pop_pars_est <- c(g_max_mean <- exp(species_data$species_par_est[1]),
+                     S_max_mean <- exp(species_data$species_par_est[3]),
+                     k_mean <- exp(species_data$species_par_est[5]))
+  
+  S_0 <- rep(3, n_ind) #Start at 3cm in size to avoid getting stuck at 1cm
+  step_size <- 0.1 #Precision of integration method
+  lifespan <- 300 #How long to project forward tree size.
+  
+  plot_pair_life_history(pop_pars_est, ind_pars_est, growth_function, 
+                    name = "BCIAvg", 
+                    S_0, step_size, lifespan)
+  
+  #Plot growth functions for all individuals.
+  n_ind <- 400
+  growth_par_ests <- data.frame(g_max = individual_data$canham_max_growth_hat, 
+                                s_max = individual_data$canham_diameter_at_max_growth_hat, 
+                                k = individual_data$canham_K_hat)
+  
+  #Plot the growth function histories starting at 3cm
+  plot_sample_life_history(growth_par_ests, growth_function, 
+                           name = "GRecondita_EstimatedPars", 
+                           n_ind, S_0, step_size=step_size, lifespan=lifespan)
+  
+  #Plot the growth function histories starting at S_0
+  plot_sample_life_history(growth_par_ests, growth_function, 
+                           name = "GRecondita_From_S_0", 
+                           n_ind, 
+                           S_0 = individual_data$canham_S_0_hat, 
+                           S_final = individual_data$S_final,
+                           step_size, lifespan = 150,
+                           min_growth_size = min(individual_data$canham_S_0_hat),
+                           max_growth_size = 100)
+  
+  plot_sample_life_history(growth_par_ests, growth_function, 
+                           name = "GRecondita_Observed", 
+                           n_ind, 
+                           S_0 = individual_data$canham_S_0_hat, 
+                           S_final = individual_data$S_final,
+                           step_size = step_size, 
+                           lifespan = 150)
+}
+```
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                      Multi-individual demonstration
@@ -342,7 +553,7 @@ rstan_data_locations <- list(
 )
 
 model_list <- list(
-  canham_model = list(
+  canham_model = list( #This model requires a step size argument in the data passed to it.
     model_spec = "R/CanhamSpec.r",
     model_name = "Canham",
     model_file = "Canham"
@@ -458,240 +669,3 @@ if(analyse_models){
 ```
 
 The compiled data files can be loaded in and examined to see the CIs for species-level estimates, individual-level parameter estimates, and size-level values. Further analysis can be done on the extracted values.
-
-
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-                        BCI data demonstration
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-In this section we will fit a Canham growth model to a sample of individuals from B. tovarensis in the Barro Colorado Island forest plot data:
-Condit, R., S. Lao, R. Pérez, S. Aguilar, R.B. Foster, S.P. Hubbell. (2019). Complete data from the Barro Colorado 50-ha plot: 423617 trees, 35 years, v3, DataONE Dash, Dataset, https://doi.org/10.15146/5xcp-0d46.
-
-A simple random sample without replacement was used to select 200 individuals with 6 observations. The RStan data file has been constructed and is stored as SingleSpecies_RStan_BTovarensis.rds in the data folder.
-
-```{r}
-run_model_BCI_example <- FALSE
-
-if(run_model_BCI_example){
-  source("R/CanhamSpec.r", local=TRUE)
-  source("R/RunModels.r", local=TRUE)
-
-  dataset <- readRDS("data/gar2in_rstan_data.rds")
-  
-  fit <- list()
-  
-  fit[[3]] <- build_rstan_model(stan_controls = single_species_controls$stan_controls, 
-                                model_name = single_species_controls$model_name,
-                                stan_file_name = single_species_controls$stan_file_path,
-                                est_method = "samp",
-                                dataset) #Index 3 used to fit into the existing functions
-  
-  filename <- paste(single_species_controls$fit_save_path, "GRecondita", sep="_")
-  filename <- paste(filename, ".rds", sep="")
-  saveRDS(fit, file=filename) #Output to file
-  
-  #Wrangle file names for diagnostic plots
-  diag_list <- single_species_controls$diagnostic_list
-  for(j in 1:length(diag_list)){
-    diag_list[[j]]$name <- paste(diag_list[[j]]$name, "GRecondita", sep="_")
-  }
-  #Plot diagnostics
-  plot_all_diagnostics(fit[[3]], int_method = 3, 
-                       diag_list,
-                       inc_warmup = FALSE)
-  
-  fit <- fit[[3]] #get rid of other elements
-  saveRDS(fit, object="output/data/Single_Species_Fit_Canham_GRecondita.rds")
-  
-  #Further diagnostics
-  #Initialise data frame for Rhat diagnostics.
-  Rhat_data <- data.frame(row.names=names(fit@sim[["samples"]][[1]]))
-  #Extract values to data frame
-  for(i in 1:length(fit@sim[["samples"]])){
-    for(j in 1:length(fit@sim[["samples"]][[1]])){
-      Rhat_data[j,i] <- Rhat(fit@sim[["samples"]][[i]][[j]])
-    }
-  }
-  #Get a histogram of all the RHats
-  histvec <- c()
-  for(i in 1:ncol(Rhat_data)){ histvec <- c(histvec, Rhat_data[,i]) }
-  hist(histvec, col="lightblue", main="Histogram of Rhats for all chains", xlab="Rhat")
-  length(which(histvec > 1.05))
-  
-  rm(fit)
-}
-```
-
-Once the model has been fit and the diagnostics do not indicate problems, we can extract the fitted values and analyse them.
-```{r}
-extract_analyse <- TRUE
-
-if(extract_analyse){
-  #Load in files
-  fit <- readRDS("output/data/Single_Species_Fit_Canham_GRecondita.rds")
-  dataset <- readRDS("output/data/SingleSpecies_RStan_GRecondita.rds")
-  dataset$int_method <- 3
-  
-  source("R/EstimateWrangling.r", local=TRUE)
-  source("R/Analyse.r", local=TRUE)
-  source("R/CanhamSpec.r", local=TRUE)
-  
-  #Sample extraction and analysis
-  #Building data frames
-  measurement_data <- tibble(treeid_factor = dataset$treeid_factor,
-                             S_obs = dataset$S_obs,
-                             census = dataset$census,
-                             census_interval = dataset$census_interval)
-  measurement_data <- measurement_data %>% 
-    group_by(treeid_factor) %>%
-    mutate(treeid = dataset$tree_id_vec[treeid_factor],
-           time=cumsum(census_interval)) %>%
-    ungroup()
-  
-  individual_data <- tibble(treeid = dataset$tree_id_vec,
-                            treeid_factor = 1:200)
-  
-  #Extract samples
-  est_data <- rstan::extract(fit, permuted=TRUE)
-  
-  #Measurement-level data
-  measurement_data$S_hat <- apply(est_data$S_hat, 2, mean)
-  measurement_data$G_hat <- apply(est_data$G_hat, 2, mean)
-  
-  #Individual-level data
-  for(i in ind_pars){
-    individual_data[[ind_pars_names[which(ind_pars == i)]]] <- apply(est_data[[i]], 2, mean)
-  }
-  
-  #Hist/boxplot combos
-  hist_names <- c("Max growth - g_max", "Size at max growth - S_max", "Spread - k")
-  for(i in 1:length(growth_par_names)){
-    layout(mat = matrix(c(1,2),2,1, byrow=TRUE),  height = c(2,8))
-    
-    par(mar=c(0, 3.1, 1.1, 2.1))
-    boxplot(individual_data[[growth_par_names[i]]] , horizontal=TRUE ,
-            xaxt="n" ,
-            col="palegreen3" , frame=F)
-    par(mar=c(4, 3.1, 1.1, 2.1))
-    hist(individual_data[[growth_par_names[i]]] , breaks=10 ,
-         col="palegreen" , main="" ,
-         xlab=hist_names[i])
-  }
-  
-  #Get final size for each individual
-  temp <- measurement_data %>%
-    group_by(treeid) %>%
-    mutate(S_final = max(S_hat)) %>%
-    distinct(treeid, S_final) %>%
-    ungroup() %>%
-    select(S_final)
-
-  individual_data$S_final <- temp$S_final
-  
-  #Compare individual-level parameters
-  pairs(~individual_data$canham_max_growth_hat + 
-          individual_data$canham_diameter_at_max_growth_hat +
-          individual_data$canham_K_hat,
-        labels = c("g_max", "S_max", "K"))
-  
-  #Large-scale plot of single pair
-  pairplot <- ggplot(data=individual_data, aes(x,y))+
-    geom_point(aes(x=canham_max_growth_hat, y=canham_K_hat), 
-               size=2, color="green4", alpha=0.6) +
-    labs(x = "g_max", y = "k") +
-    theme_classic()
-  
-  #Species-level data
-  species_par_est <- c()
-  for(i in 1:length(sp_pars)){ #Extract estimates
-    species_par_est[i] <- mean(est_data[[sp_pars[i]]])
-  }
-  species_data <- tibble(species_par_est, sp_pars_names, Lower=c(), Upper=c())
-  #Build CIs
-  hyperpar_CI <- build_par_CI(est_data, sp_pars, sp_pars_names)
-  for(i in 1:length(hyperpar_CI)){
-    species_data$Lower[i] <- hyperpar_CI[[i]][[1]]
-    species_data$Upper[i] <- hyperpar_CI[[i]][[2]]
-  }
-  
-  #Save data to file
-  save_data <- list(individual_data = individual_data,
-                    measurement_data = measurement_data,
-                    species_data = species_data)
-  save_filename <- "output/data/GRecondita_Sampled_Canham.rds"
-  saveRDS(save_data, file=save_filename)
-  
-  #Load if needed
-  save_data <- readRDS("output/data/GRecondita_Sampled_Canham.rds")
-  individual_data <- save_data$individual_data
-  measurement_data <- save_data$measurement_data
-  species_data <- save_data$species_data
-  
-  #Plots of individual sizes over time, estimated and observed
-  n_ind <- 200 #Number of plots to do
-  plot_obs_and_est_life_history(measurement_data, n_ind, "Canham")
-  
-  #Plots of sizes over time, and growth over size, for all individuals
-  plot_est_life_history(measurement_data, model_name="Canham")
-  
-  #Plot of individual size over time based on percentiles of individual parameters
-  ind_pars_est <- c(g_max <- quantile(individual_data$canham_max_growth_hat, 0.5),
-                       S_max <- quantile(individual_data$canham_diameter_at_max_growth_hat, 0.5),
-                       k <- quantile(individual_data$canham_K_hat, 0.5))
-  pop_pars_est <- c(g_max_mean <- exp(species_data$species_par_est[1]),
-                     S_max_mean <- exp(species_data$species_par_est[3]),
-                     k_mean <- exp(species_data$species_par_est[5]))
-  
-  S_0 <- rep(3, n_ind) #Start at 3cm in size to avoid getting stuck at 1cm
-  step_size <- 0.1 #Precision of integration method
-  lifespan <- 300 #How long to project forward tree size.
-  
-  plot_pair_life_history(pop_pars_est, ind_pars_est, growth_function, 
-                    name = "BCIAvg", 
-                    S_0, step_size, lifespan)
-  
-  #Take sample of individual growth parameters from posterior and plot them
-  n_ind <- 200
-  indices <- sample(c(1:200), size=n_ind)
-  sample_index <- rdunif(1, 4000, 1)
-  post_pars <- data.frame(g_max = est_data$ind_max_growth[sample_index, indices], 
-                     s_max = est_data$ind_diameter_at_max_growth[sample_index, indices], 
-                     k = est_data$ind_K[sample_index, indices])
-  temp <- data.frame(g_max = est_data$ind_max_growth[sample_index, indices], 
-                     s_max = est_data$ind_diameter_at_max_growth[sample_index, indices], 
-                     k = est_data$ind_K[sample_index, indices])
-  post_pars <- rbind(post_pars, temp)
-  #Plot the sampled growth function histories
-  plot_sample_life_history(post_pars, growth_function, 
-                           name = "GRecondita_Posterior_Samples", 
-                           n_ind, S_0, step_size=step_size, lifespan=lifespan)
-  
-  #
-  #Plot growth functions for all individuals.
-  growth_par_ests <- data.frame(g_max = individual_data$canham_max_growth_hat, 
-                                s_max = individual_data$canham_diameter_at_max_growth_hat, 
-                                k = individual_data$canham_K_hat)
-  
-  #Plot the growth function histories starting at 3cm
-  plot_sample_life_history(growth_par_ests, growth_function, 
-                           name = "GRecondita_EstimatedPars", 
-                           n_ind, S_0, step_size=step_size, lifespan=lifespan)
-  
-  #Plot the growth function histories starting at S_0
-  plot_sample_life_history(growth_par_ests, growth_function, 
-                           name = "GRecondita_From_S_0", 
-                           n_ind, 
-                           S_0 = individual_data$canham_S_0_hat, 
-                           S_final = individual_data$S_final,
-                           step_size, lifespan = 300,
-                           min_growth_size = min(individual_data$canham_S_0_hat),
-                           max_growth_size = 100)
-  
-  plot_sample_life_history(growth_par_ests, growth_function, 
-                           name = "GRecondita_Observed", 
-                           n_ind, 
-                           S_0 = individual_data$canham_S_0_hat, 
-                           S_final = individual_data$S_final,
-                           step_size = step_size, 
-                           lifespan = 30)
-}
-```

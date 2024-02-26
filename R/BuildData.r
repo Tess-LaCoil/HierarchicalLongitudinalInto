@@ -38,15 +38,16 @@ build_data <- function(data_construction_controls){
   }
 }
 
-#Add error based on Ruger et al 2011 error model and parameter estimates
-add_error <- function(size, error_type="Norm"){
+#Add error based on chosen model
+add_error <- function(size, error_type="Norm", error_size = 0.001){
   if(error_type == "Ruger"){ #Model from Ruger 2011
-    SD1 <- 0.927 + 0.0038*size
-    SD2 <- 2.56
-    size_with_error <- size + rnorm(1, mean=0, sd=SD1) + rbinom(1, size=1, prob=0.0276)*2.56
+    size_with_error <- size + ruger_error_mm(size*10)/10
     
   } else if(error_type == "Norm") { #Normally distributed error
-    size_with_error <- size + rnorm(1, mean=0, sd=1)
+    size_with_error <- size + rnorm(1, mean=0, sd=error_size)
+    
+  } else if(error_type == "none") { #No error
+    size_with_error <- size
     
   } else { #No error type or wrong error type
     print("Please input valid error type.")
@@ -54,6 +55,17 @@ add_error <- function(size, error_type="Norm"){
   }
   
   return(size_with_error)
+}
+
+#Model and values from Ruger et al 2011 Growth Strategies of Tropica Tree Species
+ruger_error_mm <- function(size_mm){#Model from Ruger 2011 p. 2 based on mm measurement
+  SD1 <- 0.927 #0.927mm
+  SD2 <- 0.0038*size_mm #Size-dependent bit
+  SD3 <- 25.6 #25.6mm
+  error_mm <- rnorm(1, mean=0, sd=(SD1 + SD2))
+  + rbinom(1, size=1, prob=0.0276) * rnorm(1, 0, SD2)
+  
+  return(error_mm)
 }
 
 #Produce list of RStan data lists for each integration method
@@ -101,13 +113,25 @@ build_sim_data <- function(error_type, growth_function, growth_function_pars,
   N_ind <- sim_pars$N_ind
   
   #Construct initial tibble
-  sim_data <- tibble(
+  sim_ind_info <- tibble(
     treeid = seq_len(N_ind),
     S_0 = exp(rnorm(N_ind, #Get initial size.
                     sim_pars$S0_mean, 
                     sim_pars$S0_sd)) +1, 
-    sim_spec(sim_pars$N_ind)
-  ) %>%
+    sim_spec(sim_pars$N_ind) #Returns parameter values for each individual
+  ) 
+  
+  if(sim_pars$model == "canham"){ #Control for identifiability problems in Canham
+    for(i in 1:N_ind){
+      while((sim_ind_info$S_0[i] >= 15)||(sim_ind_info$S_0[i] <= 1)){ #Constrain initial sizes for identifiability
+        sim_ind_info$S_0[i] <- exp(rnorm(1, #Get initial size.
+                                         sim_pars$S0_mean, 
+                                         sim_pars$S0_sd)) +1
+      }
+    }
+  }
+  
+  sim_data <- sim_ind_info %>%
     expand_grid(time) %>%
     arrange(treeid, time) %>% 
     group_by(treeid) %>%
@@ -127,23 +151,22 @@ build_sim_data <- function(error_type, growth_function, growth_function_pars,
     N_step <- sim_pars$N_obs * sim_pars$census_interval / sim_pars$step_size
     
     #We start at a random size +1cm in order to ensure a minimum size of 1
-    runge_kutta_int <- rk4_est(S_0 = (sim_data$S_0[((i-1)*sim_pars$N_obs+1)]),
+    runge_kutta_int <- rk4_est(S_0 = sim_ind_info$S_0[i],
                                growth = growth_function,
-                               pars = sim_data[((i-1)*sim_pars$census_interval + 1),
-                                               growth_function_pars],
+                               pars = sim_ind_info[i, growth_function_pars],
                                sim_pars$step_size, N_step)
     
     #Take a subset of the estimates which are the observations
     runge_kutta_obs <- runge_kutta_int[seq(from=1, 
-                           to = length(runge_kutta_int), 
-                           by = (length(runge_kutta_int)/sim_pars$N_obs))]
+                                           to = length(runge_kutta_int), 
+                                           by = (length(runge_kutta_int)/sim_pars$N_obs))]
     
     #Check that the treeid lines up and add error
     if(sim_data$treeid[((i-1)*sim_pars$N_obs+1)] == sim_data$treeid[(i*sim_pars$N_obs)]){
       sim_data$S_true[((i-1)*sim_pars$N_obs+1): (i*sim_pars$N_obs)] <- runge_kutta_obs
       
-      for(j in 1:sim_pars$N_obs){ #Add error, abs() to prevent negative size
-        sim_data$S_obs[((i-1)*sim_pars$N_obs+j)] <- abs(add_error(runge_kutta_obs[j], error_type))
+      for(k in 1:sim_pars$N_obs){ #Add error, abs() to prevent negative size
+        sim_data$S_obs[((i-1)*sim_pars$N_obs+k)] <- abs(add_error(runge_kutta_obs[k], error_type))
       }
       
     } else {
@@ -158,13 +181,22 @@ build_sim_data <- function(error_type, growth_function, growth_function_pars,
     mutate(
       S_true_next = lead(S_true),
       S_obs_next = lead(S_obs),
-      delta_S = (S_true_next - S_true)/census_interval,
-      delta_S_obs = (S_obs_next - S_obs)/census_interval
+      delta_S = (lead(S_true) - S_true),
+      delta_S_obs = (lead(S_obs) - S_obs),
+      average_growth_obs = sum(delta_S_obs, na.rm=TRUE)/max(time),
+      S_first = first(S_true),
+      S_final = last(S_true),
+      total_growth = S_final - S_first
     ) %>%
     ungroup()
   
+  sim_ind_info$average_growth_obs <- sim_data$average_growth_obs[seq(from=1, 
+                                                                     by=sim_pars$N_obs, 
+                                                                     length.out=sim_pars$N_ind)]
+  
   sim_data_list <- list(
     sim_data = sim_data,
+    sim_ind_info = sim_ind_info,
     S_0_obs = S_0_obs,
     tree_id_vec = c(1:N_ind)
   )
@@ -172,6 +204,13 @@ build_sim_data <- function(error_type, growth_function, growth_function_pars,
   sim_data_list$rstan_data <- build_rstan_data_multi_ind(N_obs = (sim_pars$N_obs*sim_pars$N_ind), 
                                                          N_ind = sim_pars$N_ind, 
                                                          sim_data_list)
+  
+  if(sim_pars$model == "canham"){ #Add step size
+    rstan_data <- c(sim_data_list$rstan_data[1],
+                    step_size = 1,
+                    sim_data_list$rstan_data[-1])
+    sim_data_list$rstan_data <- rstan_data
+  }
   
   saveRDS(sim_data_list, file=filename)
 }
