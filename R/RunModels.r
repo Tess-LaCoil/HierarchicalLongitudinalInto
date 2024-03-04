@@ -134,9 +134,9 @@ plot_all_diagnostics <- function(fit, int_method, list_of_data, inc_warmup, RHat
 }
 
 #Save diagnostic plot to file
-plot_diagnostic_trace <- function(fit, int_method, pars, name, inc_warmup){
+plot_diagnostic_trace <- function(fit, int_method, pars, name, inc_warmup, size=800){
   filename <- paste0("output/figures/diagnostic/", name, int_method, ".png")
-  png(filename, width=800, height=800)
+  png(filename, width=size, height=size)
   print(traceplot(fit, pars=pars, inc_warmup=inc_warmup))
   dev.off()
 }

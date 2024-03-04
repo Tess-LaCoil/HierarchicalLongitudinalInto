@@ -239,7 +239,7 @@ plot_obs_and_est_life_history <-function(plotting_data, n_ind, model_name){
     #Produce plot
     file_name <- paste("output/figures/sampled/", model_name,
                        "_Actual_And_Est_Sample_dot_", 
-                       j,".svg", sep="")
+                       j,".png", sep="")
     
     plot <- ggplot_obs_and_est_life_history(data, title = "")
     
@@ -251,16 +251,16 @@ plot_obs_and_est_life_history <-function(plotting_data, n_ind, model_name){
 ggplot_obs_and_est_life_history<- function(data, title){
   plot <- ggplot(data=data, aes(x, y)) +
     geom_line(aes(x=(time+1990), y=size, color=as.factor(cond),
-                  group=cond, linetype=as.factor(cond)), size=1.1) +
+                  group=cond, linetype=as.factor(cond)), linewidth=1.1) +
     geom_point(aes(x=(time+1990), y=size, color=as.factor(cond), 
                    shape=as.factor(cond),
                    group=cond), size=2.5) +
-    scale_linetype_manual(values = c("dashed", "solid")) +
-    scale_color_manual(values = c("black", "green4")) +
+    scale_linetype_manual(values = c("solid", "dashed")) +
+    scale_color_manual(values = c("green4", "black")) +
     xlab("Years") +
     ylab("Size (cm)") +
     ggtitle(title) +
-    labs(color = NULL) +
+    labs(color = NULL, shape=NULL, linetype=NULL) +
     theme_classic() +
     theme(axis.text=element_text(size=12),
           axis.title=element_text(size=14,face="bold"))
@@ -351,7 +351,7 @@ plot_pair_life_history <-function(pop_pars_est, ind_pars_est, growth_function,
 #Produces plot for plot_pair_life_history()
 ggplot_pair_life_history<- function(plot_data){
   plot <- ggplot(data=plot_data, aes(x=time, y=S_true, group=cond)) +
-    geom_line(aes(linetype=cond), size=0.8) +
+    geom_line(aes(linetype=cond), linewidth=0.8) +
     scale_linetype_manual(values=c("longdash", "solid")) +
     xlab("Years") +
     ylab("Size (cm)") +
@@ -407,10 +407,11 @@ plot_sample_life_history <- function(post_pars,
 
 ggplot_sample_life_history <- function(plot_data){
   plot <- ggplot(data=plot_data, aes(x=time, y=S_true, group=as.factor(individual))) +
-    geom_line(alpha=0.2, color="#003300", size=1) +
+    geom_line(alpha=0.2, color="#003300", linewidth=1) +
     xlab("Years") +
     ylab("Size (cm)") +
     labs(color = NULL) +
+    geom_hline(yintercept=25, linetype="dashed", colour = "black", alpha=0.6) +
     theme_classic() +
     theme(axis.text=element_text(size=16),
           axis.title=element_text(size=18,face="bold"))
@@ -423,8 +424,8 @@ ggplot_sample_growth_trajectories <- function(post_pars, growth_function,
                                               S_0, S_final){
   plot <- ggplot() +
     xlim(min_growth_size, min(c(max_growth_size, max(S_final)))) +
-    xlab("Size") +
-    ylab("Growth rate") +
+    xlab("Size (cm)") +
+    ylab("Growth rate (cm/yr)") +
     theme_classic() +
     theme(axis.text=element_text(size=16),
           axis.title=element_text(size=18,face="bold"))
@@ -433,7 +434,7 @@ ggplot_sample_growth_trajectories <- function(post_pars, growth_function,
     args_list <- list(pars=post_pars[i,])
     plot <- plot +
       geom_function(fun=growth_function, args=args_list, alpha=0.2, 
-                    color="#003300", size=1, xlim=c(S_0[i], S_final[i]))
+                    color="#003300", linewidth=1, xlim=c(S_0[i], S_final[i]))
   }
   
   return(plot)

@@ -470,11 +470,11 @@ if(extract_analyse){
   save_data <- list(individual_data = individual_data,
                     measurement_data = measurement_data,
                     species_data = species_data)
-  save_filename <- "output/data/GRecondita_Sampled_Canham.rds"
+  save_filename <- "output/data/GRecondita_Sampled_Canham_CompiledData.rds"
   saveRDS(save_data, file=save_filename)
   
   #Load if needed
-  save_data <- readRDS("output/data/GRecondita_Sampled_Canham.rds")
+  save_data <- readRDS("output/data/GRecondita_Sampled_Canham_CompiledData.rds")
   individual_data <- save_data$individual_data
   measurement_data <- save_data$measurement_data
   species_data <- save_data$species_data
@@ -589,41 +589,89 @@ To compare the species-level model to the results from the hierarchical set-up, 
 ```{r}
 source("R/Analyse.r")
 
+#Import individual-level parameters
+individual_data <- readRDS("output/data/GRecondita_Sampled_Canham_CompiledData.rds")$individual_data
+
 #Extract species level parameters
 species_only_fit <- readRDS("output/data/GRecondita_SpeciesLevelFit.rds")
 sp_est_data <- rstan::extract(species_only_fit, permuted=TRUE)
-species_growth_pars <- c(
+species_growth_pars <- tibble(
   g_max = mean(sp_est_data$species_max_growth),
   S_max = mean(sp_est_data$species_diameter_at_max_growth),
   k = mean(sp_est_data$species_K),
   S_0 = 1,
-  S_final = 25, #Get maximum size
-  source = "Species-level model"
+  S_final = max(individual_data$S_final), #Get maximum size
+  fit_model = "Species-level model"
 )
-
-#Import individual-level parameters
-individual_data <- readRDS("output/data/Single_species_compiled_data_gar2in_Canham_3_sampling.rds")$individual_data
 
 ind_growth_pars <- tibble(
   g_max = individual_data$canham_max_growth_hat,
   S_max = individual_data$canham_diameter_at_max_growth_hat,
   k = individual_data$canham_K_hat,
   S_0 = individual_data$canham_S_0_hat,
-  S_final = 25, #Get vector of final 
-  source = "Individual fits"
+  S_final = individual_data$S_final, #Get vector of final 
+  fit_model = "Individual fits"
 )
 
-median_individual_pars <- c(
+median_individual_pars <- tibble(
   g_max = median(ind_growth_pars$g_max),
   S_max = median(ind_growth_pars$S_max),
   k = median(ind_growth_pars$k),
   S_0 = 1,
-  S_final = 25,
-  source = "Individual median pars"
+  S_final = max(individual_data$S_final),
+  fit_model = "Individual median"
 )
 
-plot_data <- rbind(ind_growth_pars, median_individual_pars, species_growth_pars)
+plot <- ggplot() +
+    xlim(1, max(individual_data$S_final)) +
+    xlab("Size (cm)") +
+    ylab("Growth rate (cm/yr)") +
+    theme_classic() +
+    theme(axis.text=element_text(size=16),
+          axis.title=element_text(size=18,face="bold"))
+  
+for(i in 2:nrow(ind_growth_pars)){
+  args_list <- list(pars=ind_growth_pars[i,1:3])
+  plot <- plot +
+    geom_function(fun=growth_function, args=args_list, alpha=0.2, 
+                  linewidth=1, xlim=c(ind_growth_pars$S_0[i], ind_growth_pars$S_final[i]),
+                  color = "green4", linetype = "solid")
+}
 
+plot <- plot +
+  geom_function(fun=growth_function, 
+                args=list(pars=ind_growth_pars[1,1:3]), 
+                alpha=0.2, 
+                linewidth=1,
+                aes(col = ind_growth_pars$fit_model[1],
+                    linetype = ind_growth_pars$fit_model[1]),
+                xlim=c(ind_growth_pars$S_0[1], ind_growth_pars$S_final[1])) +
+  geom_function(fun=growth_function, 
+                args=list(pars=median_individual_pars[1,1:3]), 
+                alpha=1, 
+                linewidth=1.2,
+                aes(col = median_individual_pars$fit_model[1],
+                    linetype = median_individual_pars$fit_model[1]),
+                xlim=c(0.5, max(individual_data$S_final))) +
+  geom_function(fun=growth_function, 
+                args=list(pars=species_growth_pars[1,1:3]), 
+                alpha=1, 
+                linewidth=1.2,
+                aes(col = species_growth_pars$fit_model[1],
+                    linetype = species_growth_pars$fit_model[1]),
+                xlim=c(0.5, max(individual_data$S_final))) +
+  scale_color_manual(values = c("green4", "#005500", "black"),
+                     name = "Parameter source") +
+  scale_linetype_manual(values = c("solid", "dashed", "solid"),
+                        name = "Parameter source") +
+  theme(legend.position = c(0.7,0.8),
+        legend.title = element_text(size=14),
+        legend.text = element_text(size=12),
+        legend.key.width = unit(1.2, 'cm'),
+        axis.text=element_text(size=12),
+        axis.title=element_text(size=14)) 
+
+plot
 ```
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
