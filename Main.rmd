@@ -533,6 +533,99 @@ if(extract_analyse){
 }
 ```
 
+In comparison to Herault (2011) we fit a second G. recondita model. This one uses pairwise differences as point estimates of growth independent of the repeat measurement structure.
+```{r}
+#Build dataset from pairwise differences
+source("R/RunModels.r")
+dataset <- readRDS("data/gar2in_rstan_data.rds")
+temp_obs <- tibble(
+  S_obs = dataset$S_obs,
+  treeid_factor = dataset$treeid_factor,
+  census = dataset$census,
+  census_interval = dataset$census_interval
+  ) %>%
+  group_by(treeid_factor) %>%
+  mutate(delta_S_obs = lead(S_obs) - S_obs) %>%
+  ungroup() %>%
+  select(S_obs, delta_S_obs, census_interval) %>%
+  drop_na()
+      
+species_rstan_data <-
+  list(
+    N_obs = nrow(temp_obs),
+    S_obs = temp_obs$S_obs,
+    delta_obs = temp_obs$delta_S_obs,
+    census_interval = temp_obs$census_interval
+  )
+
+#Build model
+plot_diagnostics_species_level <- TRUE
+model <- "canham"
+        
+sp_model <- stan_model(file="stan/Canham_SpeciesLevel.stan")
+sp_model_start <- Sys.time()
+print(paste("Fitting species-level Canham model: ", sp_model_start, sep=""))
+species_only_fit <- sampling(sp_model, data=species_rstan_data, 
+                             iter=2000,
+                             chains=4,
+                             cores=4)
+sp_model_end <- Sys.time()
+print(paste("Species-level Canham model end: ",sp_model_end, sep=""))
+#warnings()
+
+if(plot_diagnostics_species_level){
+  plot_diagnostic_trace(species_only_fit, 3, c("species_max_growth", 
+                                               "species_diameter_at_max_growth", 
+                                               "species_K"), 
+                        paste("GRecondita", model, "species_model_pars", sep="_"), FALSE)
+}
+
+#Save fit
+saveRDS(species_only_fit, "output/data/GRecondita_SpeciesLevelFit.rds")
+rm(species_only_fit)
+```
+
+To compare the species-level model to the results from the hierarchical set-up, we plot the average trajectory of the species-level model over the individual trajectories.
+```{r}
+source("R/Analyse.r")
+
+#Extract species level parameters
+species_only_fit <- readRDS("output/data/GRecondita_SpeciesLevelFit.rds")
+sp_est_data <- rstan::extract(species_only_fit, permuted=TRUE)
+species_growth_pars <- c(
+  g_max = mean(sp_est_data$species_max_growth),
+  S_max = mean(sp_est_data$species_diameter_at_max_growth),
+  k = mean(sp_est_data$species_K),
+  S_0 = 1,
+  S_final = 25, #Get maximum size
+  source = "Species-level model"
+)
+
+#Import individual-level parameters
+individual_data <- readRDS("output/data/Single_species_compiled_data_gar2in_Canham_3_sampling.rds")$individual_data
+
+ind_growth_pars <- tibble(
+  g_max = individual_data$canham_max_growth_hat,
+  S_max = individual_data$canham_diameter_at_max_growth_hat,
+  k = individual_data$canham_K_hat,
+  S_0 = individual_data$canham_S_0_hat,
+  S_final = 25, #Get vector of final 
+  source = "Individual fits"
+)
+
+median_individual_pars <- c(
+  g_max = median(ind_growth_pars$g_max),
+  S_max = median(ind_growth_pars$S_max),
+  k = median(ind_growth_pars$k),
+  S_0 = 1,
+  S_final = 25,
+  source = "Individual median pars"
+)
+
+plot_data <- rbind(ind_growth_pars, median_individual_pars, species_growth_pars)
+
+```
+
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                      Multi-individual demonstration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
