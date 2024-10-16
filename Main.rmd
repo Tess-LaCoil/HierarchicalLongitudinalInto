@@ -338,22 +338,23 @@ if(run_model_BCI_example){
                                 est_method = "samp",
                                 dataset) #Index 3 used to fit into the existing functions
   
-  filename <- paste(single_species_controls$fit_save_path, "GRecondita", sep="_")
+  filename <- paste(single_species_controls$fit_save_path, "GRecondita_5obs", sep="_")
   filename <- paste(filename, ".rds", sep="")
   saveRDS(fit, file=filename) #Output to file
   
   #Wrangle file names for diagnostic plots
   diag_list <- single_species_controls$diagnostic_list
   for(j in 1:length(diag_list)){
-    diag_list[[j]]$name <- paste(diag_list[[j]]$name, "GRecondita", sep="_")
+    diag_list[[j]]$name <- paste(diag_list[[j]]$name, "GRecondita_5obs", sep="_")
   }
   #Plot diagnostics
   plot_all_diagnostics(fit[[3]], int_method = 3, 
                        diag_list,
-                       inc_warmup = FALSE)
+                       inc_warmup = FALSE,
+                       RHat_name = "GRecon_5obs")
   
   fit <- fit[[3]] #get rid of other elements in list
-  saveRDS(fit, object="output/data/Single_Species_Fit_Canham_GRecondita.rds")
+  saveRDS(fit, file="output/data/Single_Species_Fit_Canham_GRecondita_5obs.rds")
   
   #Further diagnostics
   #Initialise data frame for Rhat diagnostics.
@@ -672,6 +673,61 @@ plot <- plot +
         axis.title=element_text(size=14)) 
 
 plot
+```
+
+To test the predictive power of the model we run a second fit using the first five observations for each individual and compare the results.
+```{r}
+fit_5_obs <- TRUE
+
+if(fit_5_obs){
+  source("R/CanhamSpec.r", local=TRUE)
+  source("R/RunModels.r", local=TRUE)
+
+  dataset <- readRDS("data/gar2in_5_rstan_data.rds")
+  
+  fit <- list()
+  
+  fit[[3]] <- build_rstan_model(stan_controls = single_species_controls$stan_controls, 
+                                model_name = single_species_controls$model_name,
+                                stan_file_name = single_species_controls$stan_file_path,
+                                est_method = "samp",
+                                dataset) #Index 3 used to fit into the existing functions
+  
+  filename <- paste(single_species_controls$fit_save_path, "GRecondita_5obs_", sep="_")
+  filename <- paste(filename, ".rds", sep="")
+  saveRDS(fit, file=filename) #Output to file
+  
+  #Wrangle file names for diagnostic plots
+  diag_list <- single_species_controls$diagnostic_list
+  for(j in 1:length(diag_list)){
+    diag_list[[j]]$name <- paste(diag_list[[j]]$name, "GRecondita_5obs", sep="_")
+  }
+  #Plot diagnostics
+  plot_all_diagnostics(fit[[3]], int_method = 3, 
+                       diag_list,
+                       inc_warmup = FALSE)
+  
+  fit <- fit[[3]] #get rid of other elements in list
+  saveRDS(fit, object="output/data/Single_Species_Fit_Canham_GRecondita_5obs.rds")
+  
+  #Further diagnostics
+  #Initialise data frame for Rhat diagnostics.
+  Rhat_data <- data.frame(row.names=names(fit@sim[["samples"]][[1]]))
+  #Extract values to data frame
+  for(i in 1:length(fit@sim[["samples"]])){
+    for(j in 1:length(fit@sim[["samples"]][[1]])){
+      Rhat_data[j,i] <- Rhat(fit@sim[["samples"]][[i]][[j]])
+    }
+  }
+  #Get a histogram of all the RHats
+  histvec <- c()
+  for(i in 1:ncol(Rhat_data)){ histvec <- c(histvec, Rhat_data[,i]) }
+  hist(histvec, col="lightblue", main="Histogram of Rhats for all chains", xlab="Rhat")
+  length(which(histvec > 1.05))
+  
+  rm(fit)
+}
+
 ```
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
