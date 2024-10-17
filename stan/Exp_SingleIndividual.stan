@@ -73,13 +73,13 @@ model {
     
     if(i < N_obs){ //Avoid writing outside the bounds of the data
       if(int_method == 1){ //Euler method
-        S_hat[i+1] = euler(S_hat[i], ind_beta, census_interval[i]);
+        S_hat[i+1] = euler(S_hat[i], ind_beta, census_interval[i+1]);
   
       } else if(int_method == 2){ //Midpoint method
-        S_hat[i+1] = midpoint(S_hat[i], ind_beta, census_interval[i]);
+        S_hat[i+1] = midpoint(S_hat[i], ind_beta, census_interval[i+1]);
                         
       } else if(int_method == 3){ //RK4 method
-        S_hat[i+1] = rk4(S_hat[i], ind_beta, census_interval[i]);
+        S_hat[i+1] = rk4(S_hat[i], ind_beta, census_interval[i+1]);
         
       }
     }
@@ -107,14 +107,13 @@ generated quantities{
     
     if(i < N_obs){ //Avoid writing outside the bounds of the data
       if(int_method == 1){ //Euler method
-        S_hat[i+1] = euler(S_hat[i], ind_beta, census_interval[i]);
+        S_hat[i+1] = euler(S_hat[i], ind_beta, census_interval[i+1]);
   
       } else if(int_method == 2){ //Midpoint method
-        S_hat[i+1] = midpoint(S_hat[i], ind_beta, census_interval[i]);
+        S_hat[i+1] = midpoint(S_hat[i], ind_beta, census_interval[i+1]);
                         
       } else if(int_method == 3){ //RK4 method
-        S_hat[i+1] = rk4(S_hat[i], ind_beta, census_interval[i]);
-        
+        S_hat[i+1] = rk4(S_hat[i], ind_beta, census_interval[i+1]);
       }
     }
   }

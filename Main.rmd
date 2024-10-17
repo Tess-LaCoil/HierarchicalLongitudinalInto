@@ -614,15 +614,6 @@ ind_growth_pars <- tibble(
   fit_model = "Individual fits"
 )
 
-median_individual_pars <- tibble(
-  g_max = median(ind_growth_pars$g_max),
-  S_max = median(ind_growth_pars$S_max),
-  k = median(ind_growth_pars$k),
-  S_0 = 1,
-  S_final = max(individual_data$S_final),
-  fit_model = "Individual median"
-)
-
 plot <- ggplot() +
     xlim(1, max(individual_data$S_final)) +
     xlab("Size (cm)") +
@@ -648,13 +639,6 @@ plot <- plot +
                     linetype = ind_growth_pars$fit_model[1]),
                 xlim=c(ind_growth_pars$S_0[1], ind_growth_pars$S_final[1])) +
   geom_function(fun=growth_function, 
-                args=list(pars=median_individual_pars[1,1:3]), 
-                alpha=1, 
-                linewidth=1.2,
-                aes(col = median_individual_pars$fit_model[1],
-                    linetype = median_individual_pars$fit_model[1]),
-                xlim=c(0.5, max(individual_data$S_final))) +
-  geom_function(fun=growth_function, 
                 args=list(pars=species_growth_pars[1,1:3]), 
                 alpha=1, 
                 linewidth=1.2,
@@ -665,7 +649,8 @@ plot <- plot +
                      name = "Parameter source") +
   scale_linetype_manual(values = c("solid", "dashed", "solid"),
                         name = "Parameter source") +
-  theme(legend.position = c(0.7,0.8),
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.7,0.8),
         legend.title = element_text(size=14),
         legend.text = element_text(size=12),
         legend.key.width = unit(1.2, 'cm'),
@@ -725,7 +710,70 @@ if(fit_5_obs){
   hist(histvec, col="lightblue", main="Histogram of Rhats for all chains", xlab="Rhat")
   length(which(histvec > 1.05))
   
-  rm(fit)
+  #Run species-level model on 5 observations
+temp_obs <- tibble(
+  S_obs = dataset$S_obs,
+  treeid_factor = dataset$treeid_factor,
+  census = dataset$census,
+  census_interval = dataset$census_interval
+  ) %>%
+  group_by(treeid_factor) %>%
+  mutate(delta_S_obs = lead(S_obs) - S_obs) %>%
+  ungroup() %>%
+  select(S_obs, delta_S_obs, census_interval) %>%
+  drop_na()
+      
+species_rstan_data <-
+  list(
+    N_obs = nrow(temp_obs),
+    S_obs = temp_obs$S_obs,
+    delta_obs = temp_obs$delta_S_obs,
+    census_interval = temp_obs$census_interval
+  )
+  sp_model <- stan_model(file="stan/Canham_SpeciesLevel.stan")
+  sp_model_start <- Sys.time()
+print(paste("Fitting species-level Canham model: ", sp_model_start, sep=""))
+species_only_fit <- sampling(sp_model, data=species_rstan_data, 
+                             iter=2000,
+                             chains=4,
+                             cores=4)
+sp_model_end <- Sys.time()
+print(paste("Species-level Canham model end: ",sp_model_end, sep=""))
+#warnings()
+plot_diagnostics_species_level <- TRUE
+if(plot_diagnostics_species_level){
+  plot_diagnostic_trace(species_only_fit, 3, c("species_max_growth", 
+                                               "species_diameter_at_max_growth", 
+                                               "species_K"), 
+                        "GRecondita_5obs_Canham_species_model_pars", FALSE)
+}
+
+#Save fit
+saveRDS(species_only_fit, "output/data/GRecondita_SpeciesLevelFit_5obs.rds")
+  
+  #Extract size estimates from models
+full_model_compiled <- readRDS("output/data/Single_species_compiled_data_gar2in_Canham_3_sampling.rds")
+size_est_data <- full_model_compiled$measurement_data %>%
+  mutate(S_hat_6obs = S_hat) %>% 
+  group_by(treeid_factor) %>%
+  ungroup() %>%
+  select(treeid_factor, S_obs, S_hat_6obs, census, time)
+  #5 obs individual-level model pars
+
+  #6 individual-level model pars
+
+  #5 obs Species level model
+  sp_est_data <- rstan::extract(species_only_fit, permuted=TRUE)
+  species_growth_pars <- tibble(
+    g_max = mean(sp_est_data$species_max_growth),
+    S_max = mean(sp_est_data$species_diameter_at_max_growth),
+    k = mean(sp_est_data$species_K)
+  )
+
+
+  
+  #Compare size estimates from 6 obs ind model, 5 obs ind model, 5 obs species model
+
 }
 
 ```
@@ -733,10 +781,10 @@ if(fit_5_obs){
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
                      Multi-individual demonstration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-In this section we will expand our analysis to multiple individuals so we are able to compare the performance of integration methods for species-level parameters, and across individuals.
+In this section we will expand our simulation analysis to multiple individuals so we are able to compare the performance of integration methods for species-level parameters, and across individuals.
 
 First we specify which models to run. 
-As written, this code will use MCMC to fit each of constant, exponential, and Canham models to simulated data from those respective growth functions at the multi-species level using the Euler integration method.
+As written, this code can use MCMC to fit each of constant, exponential, and Canham models to simulated data from those respective growth functions at the multi-species level using the Euler integration method. We will work with the Canham model for the paper.
 
 To change integration method, modify the int_method parameter. 
 To modify the number of cores, chains, and samples go to the single_species_controls object in the relevant spec file.

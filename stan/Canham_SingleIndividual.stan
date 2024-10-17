@@ -74,15 +74,15 @@ model {
 
       } else if(int_method == 2){ //Midpoint method
         G_hat[i] = midpoint(S_hat[i], ind_pars,
-                            census_interval[i]);
+                            census_interval[i+1]);
       } else if(int_method == 3){ //RK4 method
         G_hat[i] = rk4(S_hat[i], ind_pars,
-                        census_interval[i]);
+                        census_interval[i+1]);
       }
     
     //Assign next size
     if(i < N_obs){ //Avoid writing outside the bounds of the data\
-      S_hat[i+1] = S_hat[i] + G_hat[i]*census_interval[i];
+      S_hat[i+1] = S_hat[i] + G_hat[i]*census_interval[i+1];
     }
   }
   
@@ -115,9 +115,25 @@ generated quantities{
       S_hat[i] = ind_S_0;
     }
     
-    //Estimate growth
-    if(int_method == 1){ //Euler method
-        G_hat[i] = growth(S_hat[i], ind_pars);
+    
+    if(i < N_obs){ //Avoid writing outside the bounds of the data\
+      //Estimate growth
+     if(int_method == 1){ //Euler method
+        G_hat[i] = growth(S_hat[i], ind_pars)*census_interval[i+1];
+
+      } else if(int_method == 2){ //Midpoint method
+        G_hat[i] = midpoint(S_hat[i], ind_pars,
+                            census_interval[i+1]);
+      } else if(int_method == 3){ //RK4 method
+        G_hat[i] = rk4(S_hat[i], ind_pars,
+                        census_interval[i+1]);
+      }
+    
+    //Assign next size
+      S_hat[i+1] = S_hat[i] + G_hat[i];
+    } else {
+      if(int_method == 1){ //Euler method
+        G_hat[i] = growth(S_hat[i], ind_pars)*census_interval[i];
 
       } else if(int_method == 2){ //Midpoint method
         G_hat[i] = midpoint(S_hat[i], ind_pars,
@@ -127,9 +143,6 @@ generated quantities{
                         census_interval[i]);
       }
     
-    //Assign next size
-    if(i < N_obs){ //Avoid writing outside the bounds of the data\
-      S_hat[i+1] = S_hat[i] + G_hat[i]*census_interval[i];
     }
   }
 }

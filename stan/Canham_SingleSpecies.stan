@@ -115,17 +115,17 @@ model {
         if(int_method == 1){ //Euler method
           S_hat[i+1] = euler(S_hat[i], ind_max_growth[treeid_factor[i]], 
             ind_diameter_at_max_growth[treeid_factor[i]], 
-            ind_K[treeid_factor[i]], census_interval[i]);
+            ind_K[treeid_factor[i]], census_interval[i+1]);
     
         } else if(int_method == 2){ //Midpoint method
           S_hat[i+1] = midpoint(S_hat[i], ind_max_growth[treeid_factor[i]], 
             ind_diameter_at_max_growth[treeid_factor[i]], 
-            ind_K[treeid_factor[i]], census_interval[i]);
+            ind_K[treeid_factor[i]], census_interval[i+1]);
                           
         } else if(int_method == 3){ //RK4 method
           S_hat[i+1] = rk4(S_hat[i], ind_max_growth[treeid_factor[i]], 
             ind_diameter_at_max_growth[treeid_factor[i]], 
-            ind_K[treeid_factor[i]], census_interval[i], step_size);
+            ind_K[treeid_factor[i]], census_interval[i+1], step_size);
         }
       }
     }
@@ -170,30 +170,56 @@ generated quantities{
         if(int_method == 1){ //Euler method
           S_hat[i+1] = euler(S_hat[i], ind_max_growth[treeid_factor[i]], 
             ind_diameter_at_max_growth[treeid_factor[i]], 
-            ind_K[treeid_factor[i]], census_interval[i]);
+            ind_K[treeid_factor[i]], census_interval[i+1]);
     
         } else if(int_method == 2){ //Midpoint method
           S_hat[i+1] = midpoint(S_hat[i], ind_max_growth[treeid_factor[i]], 
             ind_diameter_at_max_growth[treeid_factor[i]], 
-            ind_K[treeid_factor[i]], census_interval[i]);
+            ind_K[treeid_factor[i]], census_interval[i+1]);
                           
         } else if(int_method == 3){ //RK4 method
           S_hat[i+1] = rk4(S_hat[i], ind_max_growth[treeid_factor[i]], 
             ind_diameter_at_max_growth[treeid_factor[i]], 
-            ind_K[treeid_factor[i]], census_interval[i], step_size);
+            ind_K[treeid_factor[i]], census_interval[i+1], step_size);
         }
         
         G_hat[i] = S_hat[i+1] - S_hat[i];
         
-      } else { #Uses Euler to predict G_hat for final size
-        G_hat[i] = growth(S_hat[i], ind_max_growth[treeid_factor[i]], 
+      } else { #Uses previous census interval to predict G_hat for final size
+        if(int_method == 1){ //Euler method
+          S_hat_temp = euler(S_hat[i], ind_max_growth[treeid_factor[i]], 
             ind_diameter_at_max_growth[treeid_factor[i]], 
-            ind_K[treeid_factor[i]]) * census_interval[i];
+            ind_K[treeid_factor[i]], census_interval[i]);
+    
+        } else if(int_method == 2){ //Midpoint method
+          S_hat_temp = midpoint(S_hat[i], ind_max_growth[treeid_factor[i]], 
+            ind_diameter_at_max_growth[treeid_factor[i]], 
+            ind_K[treeid_factor[i]], census_interval[i]);
+                          
+        } else if(int_method == 3){ //RK4 method
+          S_hat_temp = rk4(S_hat[i], ind_max_growth[treeid_factor[i]], 
+            ind_diameter_at_max_growth[treeid_factor[i]], 
+            ind_K[treeid_factor[i]], census_interval[i], step_size);
+        }
+        G_hat[i] = S_hat_temp - S_hat[i];
       }
     } else {
-      G_hat[i] = growth(S_hat[i], ind_max_growth[treeid_factor[i]], 
+      if(int_method == 1){ //Euler method
+          S_hat_temp = euler(S_hat[i], ind_max_growth[treeid_factor[i]], 
             ind_diameter_at_max_growth[treeid_factor[i]], 
-            ind_K[treeid_factor[i]]) * census_interval[i];
+            ind_K[treeid_factor[i]], census_interval[i]);
+    
+        } else if(int_method == 2){ //Midpoint method
+          S_hat_temp = midpoint(S_hat[i], ind_max_growth[treeid_factor[i]], 
+            ind_diameter_at_max_growth[treeid_factor[i]], 
+            ind_K[treeid_factor[i]], census_interval[i]);
+                          
+        } else if(int_method == 3){ //RK4 method
+          S_hat_temp = rk4(S_hat[i], ind_max_growth[treeid_factor[i]], 
+            ind_diameter_at_max_growth[treeid_factor[i]], 
+            ind_K[treeid_factor[i]], census_interval[i], step_size);
+        }
+        G_hat[i] = S_hat_temp - S_hat[i];
     }
   }
 }
