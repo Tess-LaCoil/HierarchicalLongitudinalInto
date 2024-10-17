@@ -444,13 +444,13 @@ ggplot_sample_growth_trajectories <- function(post_pars, growth_function,
 #Runge-Kutta 4th order
 rk4_est <- function(S_0, growth, pars, step_size, N_step){
   runge_kutta_int <- c(S_0)
-  for(i in 2:N_step){
-    k1 <- growth(runge_kutta_int[i-1], pars)
-    k2 <- growth((runge_kutta_int[i-1] + step_size*k1/2), pars)
-    k3 <- growth((runge_kutta_int[i-1] + step_size*k2/2), pars)
-    k4 <- growth((runge_kutta_int[i-1] + step_size*k3), pars)
+  for(j in 2:N_step){
+    k1 <- growth(runge_kutta_int[j-1], pars)
+    k2 <- growth((runge_kutta_int[j-1] + step_size*k1/2), pars)
+    k3 <- growth((runge_kutta_int[j-1] + step_size*k2/2), pars)
+    k4 <- growth((runge_kutta_int[j-1] + step_size*k3), pars)
     
-    runge_kutta_int[i] <- runge_kutta_int[i-1] + (1/6)*(k1 + 2*k2 + 2*k3 + k4)*step_size
+    runge_kutta_int[j] <- runge_kutta_int[j-1] + (1/6)*(k1 + 2*k2 + 2*k3 + k4)*step_size
   }
   return(runge_kutta_int)
 }

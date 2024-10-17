@@ -694,6 +694,8 @@ if(fit_5_obs){
   
   fit <- fit[[3]] #get rid of other elements in list
   saveRDS(fit, object="output/data/Single_Species_Fit_Canham_GRecondita_5obs.rds")
+  rm(fit)
+  
   
   #Further diagnostics
   #Initialise data frame for Rhat diagnostics.
@@ -711,69 +713,148 @@ if(fit_5_obs){
   length(which(histvec > 1.05))
   
   #Run species-level model on 5 observations
-temp_obs <- tibble(
-  S_obs = dataset$S_obs,
-  treeid_factor = dataset$treeid_factor,
-  census = dataset$census,
-  census_interval = dataset$census_interval
-  ) %>%
-  group_by(treeid_factor) %>%
-  mutate(delta_S_obs = lead(S_obs) - S_obs) %>%
-  ungroup() %>%
-  select(S_obs, delta_S_obs, census_interval) %>%
-  drop_na()
-      
-species_rstan_data <-
-  list(
-    N_obs = nrow(temp_obs),
-    S_obs = temp_obs$S_obs,
-    delta_obs = temp_obs$delta_S_obs,
-    census_interval = temp_obs$census_interval
-  )
-  sp_model <- stan_model(file="stan/Canham_SpeciesLevel.stan")
-  sp_model_start <- Sys.time()
-print(paste("Fitting species-level Canham model: ", sp_model_start, sep=""))
-species_only_fit <- sampling(sp_model, data=species_rstan_data, 
-                             iter=2000,
-                             chains=4,
-                             cores=4)
-sp_model_end <- Sys.time()
-print(paste("Species-level Canham model end: ",sp_model_end, sep=""))
-#warnings()
-plot_diagnostics_species_level <- TRUE
-if(plot_diagnostics_species_level){
-  plot_diagnostic_trace(species_only_fit, 3, c("species_max_growth", 
-                                               "species_diameter_at_max_growth", 
-                                               "species_K"), 
-                        "GRecondita_5obs_Canham_species_model_pars", FALSE)
-}
-
-#Save fit
+  temp_obs <- tibble(
+    S_obs = dataset$S_obs,
+    treeid_factor = dataset$treeid_factor,
+    census = dataset$census,
+    census_interval = dataset$census_interval
+    ) %>%
+    group_by(treeid_factor) %>%
+    mutate(delta_S_obs = lead(S_obs) - S_obs) %>%
+    ungroup() %>%
+    select(S_obs, delta_S_obs, census_interval) %>%
+    drop_na()
+        
+  species_rstan_data <-
+    list(
+      N_obs = nrow(temp_obs),
+      S_obs = temp_obs$S_obs,
+      delta_obs = temp_obs$delta_S_obs,
+      census_interval = temp_obs$census_interval
+    )
+    sp_model <- stan_model(file="stan/Canham_SpeciesLevel.stan")
+    sp_model_start <- Sys.time()
+  print(paste("Fitting species-level Canham model: ", sp_model_start, sep=""))
+  species_only_fit <- sampling(sp_model, data=species_rstan_data, 
+                               iter=2000,
+                               chains=4,
+                               cores=4)
+  sp_model_end <- Sys.time()
+  print(paste("Species-level Canham model end: ",sp_model_end, sep=""))
+  #warnings()
+  plot_diagnostics_species_level <- TRUE
+  if(plot_diagnostics_species_level){
+    plot_diagnostic_trace(species_only_fit, 3, c("species_max_growth", 
+                                                 "species_diameter_at_max_growth", 
+                                                 "species_K"), 
+                          "GRecondita_5obs_Canham_species_model_pars", FALSE)
+  }
+  
+  #Save fit
 saveRDS(species_only_fit, "output/data/GRecondita_SpeciesLevelFit_5obs.rds")
   
   #Extract size estimates from models
-full_model_compiled <- readRDS("output/data/Single_species_compiled_data_gar2in_Canham_3_sampling.rds")
-size_est_data <- full_model_compiled$measurement_data %>%
-  mutate(S_hat_6obs = S_hat) %>% 
-  group_by(treeid_factor) %>%
-  ungroup() %>%
-  select(treeid_factor, S_obs, S_hat_6obs, census, time)
+  full_model_compiled <- readRDS("output/data/GRecondita_Sampled_Canham_CompiledData.rds")
+  size_est_data <- full_model_compiled$measurement_data %>%
+    mutate(S_hat_6obs = S_hat) %>% 
+    select(treeid_factor, S_obs, S_hat_6obs, census, census_interval, time)
+  
   #5 obs individual-level model pars
-
-  #6 individual-level model pars
-
+  fit <- readRDS("output/data/Single_Species_Fit_Canham_GRecondita_5obs.rds")
+  dataset <- readRDS("data/gar2in_5_rstan_data.rds")
+  #Extract samples
+  est_data <- rstan::extract(fit, permuted=TRUE)
+  #Building data frames
+  measurement_data <- tibble(treeid_factor = dataset$treeid_factor,
+                             S_obs = dataset$S_obs,
+                             census = dataset$census,
+                             census_interval = dataset$census_interval)
+  measurement_data <- measurement_data %>% 
+    group_by(treeid_factor) %>%
+    mutate(treeid = dataset$tree_id_vec[treeid_factor],
+           time=cumsum(census_interval)) %>%
+    ungroup()
+  measurement_data$S_hat <- apply(est_data$S_hat, 2, mean)
+  
+  individual_data <- tibble(treeid = dataset$tree_id_vec,
+                            treeid_factor = 1:400)
+  for(i in ind_pars){
+    individual_data[[ind_pars_names[which(ind_pars == i)]]] <- apply(est_data[[i]], 2, mean)
+  }
+  
   #5 obs Species level model
   sp_est_data <- rstan::extract(species_only_fit, permuted=TRUE)
-  species_growth_pars <- tibble(
+  species_growth_pars <- list(
     g_max = mean(sp_est_data$species_max_growth),
     S_max = mean(sp_est_data$species_diameter_at_max_growth),
     k = mean(sp_est_data$species_K)
   )
-
-
   
-  #Compare size estimates from 6 obs ind model, 5 obs ind model, 5 obs species model
-
+  #Construct estimates of size 6 based on size 5 and individual parameters
+  size_data_predsize <- size_est_data %>%
+    group_by(treeid_factor) %>%
+    mutate(S_0_obs = first(S_obs)) %>%
+    filter(census == 6) %>%
+    mutate(S_hat_final_size_5obs = NA, #Initialise variables to get estimated final sizes
+           S_hat_final_size_species_model = NA,
+           S_hat_final_size_species_model_from_S_0_obs = NA)
+  penultimate_size <- measurement_data %>%
+    filter(census == 5)
+  
+  size_data_predsize$penultimate_size <- penultimate_size$S_hat
+  
+  #Estimate size for 6th census based on RK4 projection forward from 5th size estimate
+  for(i in 1:nrow(size_data_predsize)){
+    #Estimation from individual model
+    pars_list <- list(
+      canham_max_growth_hat = individual_data$canham_max_growth_hat[i],
+      canham_diameter_at_max_growth_hat = individual_data$canham_diameter_at_max_growth_hat[i],
+      canham_diameter_at_max_growth_hat = individual_data$canham_K_hat[i]
+    )
+    temp_size_est <- rk4_est(S_0 = size_data_predsize$penultimate_size[i], 
+            growth = growth_function, 
+            pars = pars_list, 
+            step_size = size_data_predsize$census_interval[i]/5, 
+            N_step = 5) 
+    
+    size_data_predsize$S_hat_final_size_5obs[i] <- temp_size_est[5]
+    
+    #Estimation from species model based on penultimate size estimated by the individual level
+    temp_size_est <- rk4_est(S_0 = size_data_predsize$penultimate_size[i], 
+            growth = growth_function, 
+            pars = species_growth_pars, 
+            step_size = size_data_predsize$census_interval[i]/5, 
+            N_step = 5) 
+    
+    size_data_predsize$S_hat_final_size_species_model[i] <- temp_size_est[5]
+    
+    #Estimation from species model based on first observed size
+    temp_size_est <- rk4_est(S_0 = size_data_predsize$penultimate_size[i], 
+            growth = growth_function, 
+            pars = species_growth_pars, 
+            step_size = size_data_predsize$time[i]/25, 
+            N_step = 25) 
+    
+    size_data_predsize$S_hat_final_size_species_model_from_S_0_obs[i] <- temp_size_est[25]
+  }
+  
+  size_data_predsize <- size_data_predsize %>% 
+    mutate(
+      sq_error_6_obs_ind_model = (S_obs - S_hat_6obs)^2,
+      sq_error_5_obs_ind_model = (S_obs - S_hat_final_size_5obs)^2,
+      sq_error_5_obs_sp_model = (S_obs - S_hat_final_size_species_model)^2,
+      sq_error_5_obs_sp_model_S_0_obs = (S_obs - S_hat_final_size_species_model_from_S_0_obs)^2
+    )
+    
+  #Calculate RMSE for the estimation methods
+  print(paste("RMSE for full data model with individual level with fitted 6th size:",
+    sqrt(sum(size_data_predsize$sq_error_6_obs_ind_model)/nrow(size_data_predsize))))
+  print(paste("RMSE for reduced data model with individual level extrapolated from estimated 5th size:",
+    sqrt(sum(size_data_predsize$sq_error_5_obs_ind_model)/nrow(size_data_predsize))))
+  print(paste("RMSE for species average model extrapolated from estimated 5th size",
+    sqrt(sum(size_data_predsize$sq_error_5_obs_sp_model)/nrow(size_data_predsize)))) 
+  print(paste("RMSE for species average model extrapolated from observed 1st size",
+    sqrt(sum(size_data_predsize$S_hat_final_size_species_model_from_S_0_obs)/nrow(size_data_predsize))))
 }
 
 ```
