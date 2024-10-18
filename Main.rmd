@@ -793,13 +793,16 @@ saveRDS(species_only_fit, "output/data/GRecondita_SpeciesLevelFit_5obs.rds")
   #Construct estimates of size 6 based on size 5 and individual parameters
   size_data_predsize <- size_est_data %>%
     group_by(treeid_factor) %>%
-    mutate(S_0_obs = first(S_obs)) %>%
+    mutate(S_0_obs = first(S_obs),
+           S_5_obs = nth(S_obs, 5)) %>%
     filter(census == 6) %>%
     mutate(S_hat_final_size_5obs = NA, #Initialise variables to get estimated final sizes
            S_hat_final_size_species_model = NA,
+           S_hat_final_size_species_model_from_S_5_obs = NA,
            S_hat_final_size_species_model_from_S_0_obs = NA)
   penultimate_size <- measurement_data %>%
-    filter(census == 5)
+    filter(census == 5) %>%
+    mutate(S_5_SE = (S_hat - S_obs)^2)
   
   size_data_predsize$penultimate_size <- penultimate_size$S_hat
   
@@ -828,8 +831,17 @@ saveRDS(species_only_fit, "output/data/GRecondita_SpeciesLevelFit_5obs.rds")
     
     size_data_predsize$S_hat_final_size_species_model[i] <- temp_size_est[5]
     
-    #Estimation from species model based on first observed size
-    temp_size_est <- rk4_est(S_0 = size_data_predsize$penultimate_size[i], 
+    #Estimation from species model based on fifth observed size
+    temp_size_est <- rk4_est(S_0 = size_data_predsize$S_5_obs[i], 
+            growth = growth_function, 
+            pars = species_growth_pars, 
+            step_size = size_data_predsize$census_interval[i]/5, 
+            N_step = 5) 
+    
+    size_data_predsize$S_hat_final_size_species_model_from_S_5_obs[i] <- temp_size_est[5]
+    
+    #Estimation from species model based on fifth observed size
+    temp_size_est <- rk4_est(S_0 = size_data_predsize$S_0_obs[i], 
             growth = growth_function, 
             pars = species_growth_pars, 
             step_size = size_data_predsize$time[i]/25, 
@@ -843,6 +855,7 @@ saveRDS(species_only_fit, "output/data/GRecondita_SpeciesLevelFit_5obs.rds")
       sq_error_6_obs_ind_model = (S_obs - S_hat_6obs)^2,
       sq_error_5_obs_ind_model = (S_obs - S_hat_final_size_5obs)^2,
       sq_error_5_obs_sp_model = (S_obs - S_hat_final_size_species_model)^2,
+      sq_error_5_obs_sp_model_S_5_obs = (S_obs - S_hat_final_size_species_model_from_S_5_obs)^2,
       sq_error_5_obs_sp_model_S_0_obs = (S_obs - S_hat_final_size_species_model_from_S_0_obs)^2
     )
     
@@ -852,10 +865,24 @@ saveRDS(species_only_fit, "output/data/GRecondita_SpeciesLevelFit_5obs.rds")
   print(paste("RMSE for reduced data model with individual level extrapolated from estimated 5th size:",
     sqrt(sum(size_data_predsize$sq_error_5_obs_ind_model)/nrow(size_data_predsize))))
   print(paste("RMSE for species average model extrapolated from estimated 5th size",
-    sqrt(sum(size_data_predsize$sq_error_5_obs_sp_model)/nrow(size_data_predsize)))) 
+    sqrt(sum(size_data_predsize$sq_error_5_obs_sp_model)/nrow(size_data_predsize))))
+  print(paste("RMSE for species average model extrapolated from observed 5th size",
+    sqrt(sum(size_data_predsize$sq_error_5_obs_sp_model_S_5_obs)/nrow(size_data_predsize))))
   print(paste("RMSE for species average model extrapolated from observed 1st size",
-    sqrt(sum(size_data_predsize$S_hat_final_size_species_model_from_S_0_obs)/nrow(size_data_predsize))))
+    sqrt(sum(size_data_predsize$sq_error_5_obs_sp_model_S_0_obs)/nrow(size_data_predsize))))
+
+hist(sqrt(size_data_predsize$sq_error_5_obs_sp_model), 
+     main=paste( "From estimated 5th size, RMSE:", 
+     sqrt(sum(size_data_predsize$sq_error_5_obs_sp_model)/nrow(size_data_predsize))), 
+     xlim = c(0, 4))
+hist(sqrt(size_data_predsize$sq_error_5_obs_sp_model_S_5_obs), 
+     main = "From obs 5th size, RMSE:", 
+     sqrt(sum(size_data_predsize$S_hat_final_size_species_model_from_S_5_obs)/nrow(size_data_predsize)), 
+     xlim = c(0, 4))  
+
+
 }
+
 
 ```
 
