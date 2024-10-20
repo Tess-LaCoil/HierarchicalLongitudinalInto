@@ -157,6 +157,7 @@ model {
 generated quantities{
   real S_hat[N_obs];
   real G_hat[N_obs];
+  real S_hat_temp;
   
   for(i in 1:N_obs){
     if(census[i]==1){//Fits the first size

@@ -660,59 +660,35 @@ plot <- plot +
 plot
 ```
 
-To test the predictive power of the model we run a second fit using the first five observations for each individual and compare the results.
+As part of the method analysis we want to check what the out-of-sample predictive power is like, compared to the ability to predict sizes within the sample. To examine this we look at the ability of models fit to the first 5 observations with regards to their capacity to extrapolate to a 6th size that we can compare to the observed 6th size. 
+
+We are going to build 3 more models: the hierarachical model with Canham growth function fit to 5 observations per individual, the species-average model with Canham growth function, and a hierarchical model with constant growth function and individual level average growth parameters. For the first and third we will estimate the 6th size from the estimated 5th size, while for the second we will estimate the 6th size from the observed 5th size as it does not directly estimate sizes over time at the individual level.
 ```{r}
 fit_5_obs <- TRUE
 
 if(fit_5_obs){
-  source("R/CanhamSpec.r", local=TRUE)
   source("R/RunModels.r", local=TRUE)
-
+  
+  #Select model parameters
+  stan_controls = list(
+    iter = 2000,
+    chains = 4,
+    cores = 4,
+    control = list(max_treedepth = 20)
+  )
+  
+  #Fit hierarchical model to 5 observations
   dataset <- readRDS("data/gar2in_5_rstan_data.rds")
-  
-  fit <- list()
-  
-  fit[[3]] <- build_rstan_model(stan_controls = single_species_controls$stan_controls, 
-                                model_name = single_species_controls$model_name,
-                                stan_file_name = single_species_controls$stan_file_path,
-                                est_method = "samp",
-                                dataset) #Index 3 used to fit into the existing functions
-  
-  filename <- paste(single_species_controls$fit_save_path, "GRecondita_5obs_", sep="_")
-  filename <- paste(filename, ".rds", sep="")
-  saveRDS(fit, file=filename) #Output to file
-  
-  #Wrangle file names for diagnostic plots
-  diag_list <- single_species_controls$diagnostic_list
-  for(j in 1:length(diag_list)){
-    diag_list[[j]]$name <- paste(diag_list[[j]]$name, "GRecondita_5obs", sep="_")
-  }
-  #Plot diagnostics
-  plot_all_diagnostics(fit[[3]], int_method = 3, 
-                       diag_list,
-                       inc_warmup = FALSE)
-  
-  fit <- fit[[3]] #get rid of other elements in list
+  fit <- build_rstan_model(stan_controls,
+                           model_name = "Canham",
+                           stan_file_name = "stan/Canham_SingleSpecies.stan",
+                           est_method = "samp",
+                           rstan_data = dataset)
   saveRDS(fit, object="output/data/Single_Species_Fit_Canham_GRecondita_5obs.rds")
   rm(fit)
   
-  
-  #Further diagnostics
-  #Initialise data frame for Rhat diagnostics.
-  Rhat_data <- data.frame(row.names=names(fit@sim[["samples"]][[1]]))
-  #Extract values to data frame
-  for(i in 1:length(fit@sim[["samples"]])){
-    for(j in 1:length(fit@sim[["samples"]][[1]])){
-      Rhat_data[j,i] <- Rhat(fit@sim[["samples"]][[i]][[j]])
-    }
-  }
-  #Get a histogram of all the RHats
-  histvec <- c()
-  for(i in 1:ncol(Rhat_data)){ histvec <- c(histvec, Rhat_data[,i]) }
-  hist(histvec, col="lightblue", main="Histogram of Rhats for all chains", xlab="Rhat")
-  length(which(histvec > 1.05))
-  
   #Run species-level model on 5 observations
+  #Construct dataset first
   temp_obs <- tibble(
     S_obs = dataset$S_obs,
     treeid_factor = dataset$treeid_factor,
@@ -725,35 +701,35 @@ if(fit_5_obs){
     select(S_obs, delta_S_obs, census_interval) %>%
     drop_na()
         
-  species_rstan_data <-
+  dataset <-
     list(
       N_obs = nrow(temp_obs),
       S_obs = temp_obs$S_obs,
       delta_obs = temp_obs$delta_S_obs,
       census_interval = temp_obs$census_interval
     )
-    sp_model <- stan_model(file="stan/Canham_SpeciesLevel.stan")
-    sp_model_start <- Sys.time()
-  print(paste("Fitting species-level Canham model: ", sp_model_start, sep=""))
-  species_only_fit <- sampling(sp_model, data=species_rstan_data, 
-                               iter=2000,
-                               chains=4,
-                               cores=4)
-  sp_model_end <- Sys.time()
-  print(paste("Species-level Canham model end: ",sp_model_end, sep=""))
-  #warnings()
-  plot_diagnostics_species_level <- TRUE
-  if(plot_diagnostics_species_level){
-    plot_diagnostic_trace(species_only_fit, 3, c("species_max_growth", 
-                                                 "species_diameter_at_max_growth", 
-                                                 "species_K"), 
-                          "GRecondita_5obs_Canham_species_model_pars", FALSE)
-  }
+  fit <- build_rstan_model(stan_controls,
+                           model_name = "Canham",
+                           stan_file_name = "stan/Canham_SpeciesLevel.stan",
+                           est_method = "samp",
+                           rstan_data = dataset)
+  saveRDS(fit, object="output/data/GRecondita_SpeciesLevelFit_5obs.rds")
+  rm(fit)
   
-  #Save fit
-saveRDS(species_only_fit, "output/data/GRecondita_SpeciesLevelFit_5obs.rds")
+  #Fit constant growth model to 5 observations
+  dataset <- readRDS("data/gar2in_5_rstan_data.rds")
+  fit <- build_rstan_model(stan_controls,
+                           model_name = "Constant",
+                           stan_file_name = "stan/ConstGrowth_SingleSpecies.stan",
+                           est_method = "samp",
+                           rstan_data = dataset)
+  saveRDS(fit, object="output/data/Single_Species_Fit_Const_GRecondita_5obs.rds")
+  rm(fit)
   
   #Extract size estimates from models
+  
+  
+  
   full_model_compiled <- readRDS("output/data/GRecondita_Sampled_Canham_CompiledData.rds")
   size_est_data <- full_model_compiled$measurement_data %>%
     mutate(S_hat_6obs = S_hat) %>% 
