@@ -279,3 +279,35 @@ bayes_ci <-function(vec){
   return(ci)
 }
 
+#-----------------------------------------------------------------------------#
+#                 Predictive power estimation
+#-----------------------------------------------------------------------------#
+S_6_obs <- tibble_6th_obs$S_obs
+census_interval <- tibble_6th_obs$census_interval
+model_spec_name <- "R/ConstSpec.r"
+
+extract_est_tibble <- function(fit, model_spec_name, dataset, S_6_obs, census_interval){
+  source(model_spec_name, local=TRUE)
+  #Extract samples
+  est_data <- rstan::extract(fit, permuted=TRUE)
+  #Building data frames
+  measurement_data <- tibble(treeid_factor = dataset$treeid_factor,
+                             census = dataset$census)
+  measurement_data$S_hat <- apply(est_data$S_hat, 2, mean)
+  temp_starting_size <- measurement_data %>%
+    filter(census == 5) %>%
+    mutate(S_5 = S_hat) %>%
+    select(treeid_factor, S_5)
+  temp_starting_size$S_6_obs <- S_6_obs
+  temp_starting_size$census_interval <- census_interval
+  
+  temp_par_list <- list()
+  par_list_vec <- c()
+  for(j in 1:nrow(temp_starting_size)){
+    temp_list <- list()
+    for(k in ind_pars){
+      temp_list[[ind_pars_names[which(ind_pars == k)]]] <- apply(est_data[[k]], 2, mean)
+    }
+    par_list_vec[j] <- temp_list
+  }
+}

@@ -1,8 +1,8 @@
 //Growth function
 functions{
   //Growth function for use with Runge-Kutta method
-  real growth(real y, vector ind_pars[1]){
-    return ind_pars[1];
+  real growth(real y, real beta){
+    return beta;
   }
 }
 
@@ -36,11 +36,11 @@ parameters {
 model {
   real S_hat[N_obs];
   real G_hat[N_obs];
-  vector ind_pars[1]; // (beta)
+  real ind_pars; // (beta)
 
   for(i in 1:N_obs){
     //get parameters
-    ind_pars[1] = ind_beta[treeid_factor[i]];
+    ind_pars = ind_beta[treeid_factor[i]];
     
     if(census[i]==1){//Fits the first size
       S_hat[i] = ind_S_0[treeid_factor[i]];
@@ -75,14 +75,17 @@ model {
 }
 
 generated quantities{
-  model {
   real S_hat[N_obs];
   real G_hat[N_obs];
-  vector ind_pars[1]; // (beta)
+  real ind_pars; // (beta)
 
   for(i in 1:N_obs){
     //get parameters
-    ind_pars[1] = ind_beta[treeid_factor[i]];
+    ind_pars = ind_beta[treeid_factor[i]];
+    
+    if(census[i]==1){//Fits the first size
+      S_hat[i] = ind_S_0[treeid_factor[i]];
+    }
     
     //Assign next size
     if(i < N_obs){ //Avoid writing outside the bounds of the data

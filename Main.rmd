@@ -677,6 +677,26 @@ if(fit_5_obs){
     control = list(max_treedepth = 20)
   )
   
+  dataset_all_obs <- readRDS("data/gar2in_rstan_data.rds")
+  tibble_6th_obs <- tibble(
+   S_obs = dataset_all_obs$S_obs,
+   treeid_factor = dataset_all_obs$treeid_factor,
+   census = dataset_all_obs$census,
+   census_interval = dataset_all_obs$census_interval
+  ) %>%
+    filter(census == 6)
+  
+  #Initialise data structure
+  final_size_esta_data <- tibble(
+    source = c(),
+    treeid_factor = c(),
+    S_5 = c(),
+    census_interval = c(),
+    g_max = c(),
+    S_max = c(),
+    k = c()
+  )
+  
   #Fit hierarchical model to 5 observations
   dataset <- readRDS("data/gar2in_5_rstan_data.rds")
   fit <- build_rstan_model(stan_controls,
@@ -684,7 +704,9 @@ if(fit_5_obs){
                            stan_file_name = "stan/Canham_SingleSpecies.stan",
                            est_method = "samp",
                            rstan_data = dataset)
-  saveRDS(fit, object="output/data/Single_Species_Fit_Canham_GRecondita_5obs.rds")
+  saveRDS(fit, file="output/data/Single_Species_Fit_Canham_GRecondita_5obs.rds")
+  
+  
   rm(fit)
   
   #Run species-level model on 5 observations
@@ -701,7 +723,7 @@ if(fit_5_obs){
     select(S_obs, delta_S_obs, census_interval) %>%
     drop_na()
         
-  dataset <-
+  dataset_diffs <-
     list(
       N_obs = nrow(temp_obs),
       S_obs = temp_obs$S_obs,
@@ -712,8 +734,8 @@ if(fit_5_obs){
                            model_name = "Canham",
                            stan_file_name = "stan/Canham_SpeciesLevel.stan",
                            est_method = "samp",
-                           rstan_data = dataset)
-  saveRDS(fit, object="output/data/GRecondita_SpeciesLevelFit_5obs.rds")
+                           rstan_data = dataset_diffs)
+  saveRDS(fit, file="output/data/GRecondita_SpeciesLevelFit_5obs.rds")
   rm(fit)
   
   #Fit constant growth model to 5 observations
@@ -723,64 +745,94 @@ if(fit_5_obs){
                            stan_file_name = "stan/ConstGrowth_SingleSpecies.stan",
                            est_method = "samp",
                            rstan_data = dataset)
-  saveRDS(fit, object="output/data/Single_Species_Fit_Const_GRecondita_5obs.rds")
+  saveRDS(fit, file="output/data/Single_Species_Fit_Const_GRecondita_5obs.rds")
   rm(fit)
   
   #Extract size estimates from models
-  
-  
-  
   full_model_compiled <- readRDS("output/data/GRecondita_Sampled_Canham_CompiledData.rds")
   size_est_data <- full_model_compiled$measurement_data %>%
     mutate(S_hat_6obs = S_hat) %>% 
+    filter(census == 6) %>%
     select(treeid_factor, S_obs, S_hat_6obs, census, census_interval, time)
   
-  #5 obs individual-level model pars
-  fit <- readRDS("output/data/Single_Species_Fit_Canham_GRecondita_5obs.rds")
-  dataset <- readRDS("data/gar2in_5_rstan_data.rds")
-  #Extract samples
-  est_data <- rstan::extract(fit, permuted=TRUE)
-  #Building data frames
-  measurement_data <- tibble(treeid_factor = dataset$treeid_factor,
-                             S_obs = dataset$S_obs,
-                             census = dataset$census,
-                             census_interval = dataset$census_interval)
-  measurement_data <- measurement_data %>% 
-    group_by(treeid_factor) %>%
-    mutate(treeid = dataset$tree_id_vec[treeid_factor],
-           time=cumsum(census_interval)) %>%
-    ungroup()
-  measurement_data$S_hat <- apply(est_data$S_hat, 2, mean)
+  fit_save_paths <- c(
+    "output/data/GRecondita_SpeciesLevelFit_5obs.rds",
+    "output/data/Single_Species_Fit_Canham_GRecondita_5obs.rds",
+    "output/data/Single_Species_Fit_Const_GRecondita_5obs.rds"
+  )
   
-  individual_data <- tibble(treeid = dataset$tree_id_vec,
-                            treeid_factor = 1:400)
-  for(i in ind_pars){
-    individual_data[[ind_pars_names[which(ind_pars == i)]]] <- apply(est_data[[i]], 2, mean)
+  fit_name <- c(
+    "species_avg_5_obs",
+    "hierarchical_canham_5_obs",
+    "hierarchical_const_5_obs"
+  )
+  
+  model_spec_name <- c(
+    "R/CanhamSpec.r",
+    "R/CanhamSpec.r",
+    "R/ConstSpec.r"
+  )
+  
+  dataset <- readRDS("data/gar2in_5_rstan_data.rds")
+  
+  starting_size <- tibble(treeid_factor = 1:400)
+  pars <- list()
+  
+  for(i in 2:3){ #Extract values for hierarchical models
+    #Load in fit
+    fit <- readRDS(fit_save_paths[i])
+    source(model_spec_name[i], local=TRUE)
+    #Extract samples
+    est_data <- rstan::extract(fit, permuted=TRUE)
+    #Building data frames
+    measurement_data <- tibble(treeid_factor = dataset$treeid_factor,
+                               S_obs = dataset$S_obs,
+                               census = dataset$census,
+                               census_interval = dataset$census_interval)
+    measurement_data <- measurement_data %>% 
+      group_by(treeid_factor) %>%
+      mutate(treeid = dataset$tree_id_vec[treeid_factor],
+             time=cumsum(census_interval)) %>%
+      ungroup()
+    measurement_data$S_hat <- apply(est_data$S_hat, 2, mean)
+    temp_starting_size <- measurement_data %>%
+      filter(census == 5) %>%
+      select(treeid_factor, S_hat) %>%
+      mutate(starting_size = S_hat)
+    
+    starting_size[[fit_name[i]]] <- temp_starting_size$starting_size
+    
+    individual_data <- tibble(treeid = dataset$tree_id_vec,
+                              treeid_factor = 1:400)
+    for(j in ind_pars){
+      individual_data[[ind_pars_names[which(ind_pars == j)]]] <- apply(est_data[[j]], 2, mean)
+    }
+    
+    temp_par_list <- list()
+    for(j in 1:nrow(individual_data)){
+      temp_par_list[[j]] <- list(
+        g_max = individual_data$canham_max_growth_hat[j],
+        S_max = individual_data$canham_diameter_at_max_growth_hat[j],
+        k = individual_data$canham_K_hat[j]
+      )
+    }
+    pars[[fit_name[i]]] <- temp_par_list
   }
   
-  #5 obs Species level model
-  sp_est_data <- rstan::extract(species_only_fit, permuted=TRUE)
+  #Extract values for species average model
+  fit <- readRDS(fit_save_paths[1])
+  sp_est_data <- rstan::extract(fit, permuted=TRUE)
   species_growth_pars <- list(
     g_max = mean(sp_est_data$species_max_growth),
     S_max = mean(sp_est_data$species_diameter_at_max_growth),
     k = mean(sp_est_data$species_K)
   )
-  
-  #Construct estimates of size 6 based on size 5 and individual parameters
-  size_data_predsize <- size_est_data %>%
-    group_by(treeid_factor) %>%
-    mutate(S_0_obs = first(S_obs),
-           S_5_obs = nth(S_obs, 5)) %>%
-    filter(census == 6) %>%
-    mutate(S_hat_final_size_5obs = NA, #Initialise variables to get estimated final sizes
-           S_hat_final_size_species_model = NA,
-           S_hat_final_size_species_model_from_S_5_obs = NA,
-           S_hat_final_size_species_model_from_S_0_obs = NA)
-  penultimate_size <- measurement_data %>%
-    filter(census == 5) %>%
-    mutate(S_5_SE = (S_hat - S_obs)^2)
-  
-  size_data_predsize$penultimate_size <- penultimate_size$S_hat
+  temp_par_list <- list()
+  for(j in 1:nrow(individual_data)){ #All individuals have the species average pars
+    temp_par_list[[j]] <- species_growth_pars
+  }
+  pars[[fit_name[1]]] <- temp_par_list
+  starting_size[[fit_name[1]]] <- full_model_compiled$measurement_data$S_obs[which(full_model_compiled$measurement_data$census == 5)]
   
   #Estimate size for 6th census based on RK4 projection forward from 5th size estimate
   for(i in 1:nrow(size_data_predsize)){
