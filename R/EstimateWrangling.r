@@ -300,13 +300,36 @@ extract_est_tibble <- function(fit,
   
   temp_par_list <- list()
   
-  if(grepl("hierarchical", model_name, fixed=TRUE) == 1){ #Pick out the estimated fifth size
+  if(grepl("6_obs", model_name, fixed=TRUE) == 1){
+    S_hat_temp <- tibble(
+      S_hat = apply(est_data$S_hat, 2, mean),
+      census = rep(1:6, times = 400)
+    ) %>%
+      filter(census != 6)
+    
+    measurement_data$S_hat <- S_hat_temp$S_hat
+    temp_starting_size <- measurement_data %>%
+      filter(census == 5) %>%
+      mutate(S_5 = S_hat) %>%
+      select(model_name, model_spec_name, treeid_factor, S_5)
+    
+  } else if(grepl("hierarchical", model_name, fixed=TRUE) == 1){ #Pick out the estimated fifth size
     measurement_data$S_hat <- apply(est_data$S_hat, 2, mean)
     temp_starting_size <- measurement_data %>%
       filter(census == 5) %>%
       mutate(S_5 = S_hat) %>%
       select(model_name, model_spec_name, treeid_factor, S_5)
     
+  } else { #Use the observed 5th size
+    measurement_data$S_hat <-dataset$S_obs
+    temp_starting_size <- measurement_data %>%
+      filter(census == 5) %>%
+      mutate(S_5 = S_hat) %>%
+      select(model_name, model_spec_name, treeid_factor, S_5)
+  }
+  
+  #Get individual parameter values
+  if(grepl("hierarchical", model_name, fixed=TRUE) == 1){
     individual_data <- tibble(treeid_factor = 1:400)
     for(j in growth_pars){
       individual_data[[j]] <- apply(est_data[[j]], 2, mean)
@@ -325,13 +348,7 @@ extract_est_tibble <- function(fit,
       )
     }
     
-  } else { #Use the observed 5th size and the species-level average parameters
-    measurement_data$S_hat <-dataset$S_obs
-    temp_starting_size <- measurement_data %>%
-      filter(census == 5) %>%
-      mutate(S_5 = S_hat) %>%
-      select(model_name, model_spec_name, treeid_factor, S_5)
-    
+  } else { #Species-level averages
     temp_par_list <- list()
     for(j in 1:nrow(temp_starting_size)){
       pars <- list()

@@ -3,6 +3,7 @@ output: html_document
 editor_options: 
   chunk_output_type: console
 ---
+# Demonstration code
 In this code we walk through the analysis for [preprint], building a method for fitting a hierarchical Bayesian longitudinal model to repeat measurement data.
 
 In this analysis we will build simulated datasets of tree size with various growth functions, then fit models to that data. We will also demonstrate the method applied to a real-world dataset. In the course of the investigation we consider the behaviour of different sample sizes, growth functions, and numerical integration methods.
@@ -150,9 +151,8 @@ for(i in c(10, 100, 1000, 10000)){
 }
 ```
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-                     Single time series demonstration
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Single time series demonstration
+
 Here we will demonstrate the effect of each integration method (Euler, midpoint, Runge-Kutta 4th order) on the size and growth parmeter estimates from a single individual's growth history, projected forward with an exponential growth function.
 
 Load in functions.
@@ -313,9 +313,7 @@ axis(1, at = c(1,2,3), labels = c("Euler", "Midpoint", "RK4"))
 
 ```
 
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-                        BCI data demonstration
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# BCI data demonstration
 In this section we will fit a Canham growth model to a sample of individuals from Garcinia recondita in the Barro Colorado Island forest plot data:
 Condit, R., S. Lao, R. Pérez, S. Aguilar, R.B. Foster, S.P. Hubbell. (2019). Complete data from the Barro Colorado 50-ha plot: 423617 trees, 35 years, v3, DataONE Dash, Dataset, https://doi.org/10.15146/5xcp-0d46.
 
@@ -677,7 +675,8 @@ if(fit_5_obs){
     control = list(max_treedepth = 20)
   )
   
-  #Fit hierarchical model to 5 observations
+  #Fit Canham hierarchical model to 5 observations
+  #This fit takes a while, expect 50+ hours.
   dataset <- readRDS("data/gar2in_5_rstan_data.rds")
   fit <- build_rstan_model(stan_controls,
                            model_name = "Canham",
@@ -685,12 +684,11 @@ if(fit_5_obs){
                            est_method = "samp",
                            rstan_data = dataset)
   saveRDS(fit, file="output/data/Single_Species_Fit_Canham_GRecondita_5obs.rds")
-  
-  
   rm(fit)
   
   #Run species-level model on 5 observations
   #Construct dataset first
+  dataset <- readRDS("data/gar2in_5_rstan_data.rds")
   temp_obs <- tibble(
     S_obs = dataset$S_obs,
     treeid_factor = dataset$treeid_factor,
@@ -727,7 +725,14 @@ if(fit_5_obs){
                            rstan_data = dataset)
   saveRDS(fit, file="output/data/Single_Species_Fit_Const_GRecondita_5obs.rds")
   rm(fit)
-  
+}
+```
+
+The next step involves extracting estimated final sizes from different models to compare RMSE. We will look at the hierarchical Canham model fit to 6 observations as a baseline in-sample RMSE, and compare that to each of the three models fit to the first 5 observations. For the hierarchical models (Canham and constant growth) we use the estimated 5th size as the starting point for extrapolation to the 6th. For the species-average model we use the observed 5th size instead.
+```{r}
+extract_predictive_RMSE <- TRUE
+
+if(extract_predictive_RMSE){
   #Extract size estimates from models
   dataset_all_obs <- readRDS("data/gar2in_rstan_data.rds")
   tibble_6th_obs <- tibble(
@@ -741,28 +746,40 @@ if(fit_5_obs){
   fit_save_paths <- c(
     "output/data/GRecondita_SpeciesLevelFit_5obs.rds",
     "output/data/Single_Species_Fit_Canham_GRecondita_5obs.rds",
-    "output/data/Single_Species_Fit_Const_GRecondita_5obs.rds"
+    "output/data/Single_Species_Fit_Const_GRecondita_5obs.rds",
+    "output/data/Single_Species_Fit_Canham_GRecondita.rds"
   )
   
   fit_name <- c(
     "species_avg_5_obs",
     "hierarchical_canham_5_obs",
-    "hierarchical_const_5_obs"
+    "hierarchical_const_5_obs",
+    "hierarchical_canham_6_obs"
+  )
+  
+  fit_title <- c(
+    "Species average Canham model fit to 5 obs.",
+    "Hierarchical Canham fit to 5 obs.",
+    "Hierarchical constant fit to 5 obs.",
+    "Hierarchical Canham fit to 6 obs."
   )
   
   model_spec_name_vec <- c(
     "R/CanhamSpec.r",
     "R/CanhamSpec.r",
-    "R/ConstSpec.r"
+    "R/ConstSpec.r",
+    "R/CanhamSpec.r"
   )
 
   dataset <- readRDS("data/gar2in_5_rstan_data.rds")
   
+  source("R/EstimateWrangling.r")
   pars_list <- list()
   starting_size <- tibble()
   
   for(i in 1:length(fit_name)){
     fit <- readRDS(fit_save_paths[i])
+    print(paste0("Wrangling fit: ", fit_name[i]))
     
     temp_return_data <- extract_est_tibble(fit, 
                                model_name = fit_name[i], 
@@ -775,81 +792,44 @@ if(fit_5_obs){
     pars_list <- c(pars_list, temp_return_data$par_list)
   }
   
+  starting_size$S_final_hat <- 0
+  source("R/Analyse.r")
   #Estimate size for 6th census based on RK4 projection forward from 5th size estimate
-  for(i in 1:nrow(size_data_predsize)){
+  for(i in 1:nrow(starting_size)){
+    if((i-1) %% 50 == 0){
+      print(paste0("Row: ", i))
+    }
+    source(starting_size$model_spec_name[i])
     #Estimation from individual model
-    pars_list <- list(
-      canham_max_growth_hat = individual_data$canham_max_growth_hat[i],
-      canham_diameter_at_max_growth_hat = individual_data$canham_diameter_at_max_growth_hat[i],
-      canham_diameter_at_max_growth_hat = individual_data$canham_K_hat[i]
-    )
-    temp_size_est <- rk4_est(S_0 = size_data_predsize$penultimate_size[i], 
+    pars <- pars_list[[i]]$pars
+    
+    temp_size_est <- rk4_est(S_0 = starting_size$S_5[i], 
             growth = growth_function, 
-            pars = pars_list, 
-            step_size = size_data_predsize$census_interval[i]/5, 
+            pars = pars, 
+            step_size = starting_size$census_interval[i]/5, 
             N_step = 5) 
     
-    size_data_predsize$S_hat_final_size_5obs[i] <- temp_size_est[5]
-    
-    #Estimation from species model based on penultimate size estimated by the individual level
-    temp_size_est <- rk4_est(S_0 = size_data_predsize$penultimate_size[i], 
-            growth = growth_function, 
-            pars = species_growth_pars, 
-            step_size = size_data_predsize$census_interval[i]/5, 
-            N_step = 5) 
-    
-    size_data_predsize$S_hat_final_size_species_model[i] <- temp_size_est[5]
-    
-    #Estimation from species model based on fifth observed size
-    temp_size_est <- rk4_est(S_0 = size_data_predsize$S_5_obs[i], 
-            growth = growth_function, 
-            pars = species_growth_pars, 
-            step_size = size_data_predsize$census_interval[i]/5, 
-            N_step = 5) 
-    
-    size_data_predsize$S_hat_final_size_species_model_from_S_5_obs[i] <- temp_size_est[5]
-    
-    #Estimation from species model based on fifth observed size
-    temp_size_est <- rk4_est(S_0 = size_data_predsize$S_0_obs[i], 
-            growth = growth_function, 
-            pars = species_growth_pars, 
-            step_size = size_data_predsize$time[i]/25, 
-            N_step = 25) 
-    
-    size_data_predsize$S_hat_final_size_species_model_from_S_0_obs[i] <- temp_size_est[25]
+    starting_size$S_final_hat[i] <- temp_size_est[5]
   }
   
-  size_data_predsize <- size_data_predsize %>% 
-    mutate(
-      sq_error_6_obs_ind_model = (S_obs - S_hat_6obs)^2,
-      sq_error_5_obs_ind_model = (S_obs - S_hat_final_size_5obs)^2,
-      sq_error_5_obs_sp_model = (S_obs - S_hat_final_size_species_model)^2,
-      sq_error_5_obs_sp_model_S_5_obs = (S_obs - S_hat_final_size_species_model_from_S_5_obs)^2,
-      sq_error_5_obs_sp_model_S_0_obs = (S_obs - S_hat_final_size_species_model_from_S_0_obs)^2
-    )
+  #Calculate error
+  starting_size$S_final_error <- starting_size$S_6_obs - starting_size$S_final_hat
+  par(mfrow = c(4,1))
+
+  for(i in 1:length(fit_name)){
+    temp_size <- starting_size %>%
+      filter(model_name == fit_name[i])
     
-  #Calculate RMSE for the estimation methods
-  print(paste("RMSE for full data model with individual level with fitted 6th size:",
-    sqrt(sum(size_data_predsize$sq_error_6_obs_ind_model)/nrow(size_data_predsize))))
-  print(paste("RMSE for reduced data model with individual level extrapolated from estimated 5th size:",
-    sqrt(sum(size_data_predsize$sq_error_5_obs_ind_model)/nrow(size_data_predsize))))
-  print(paste("RMSE for species average model extrapolated from estimated 5th size",
-    sqrt(sum(size_data_predsize$sq_error_5_obs_sp_model)/nrow(size_data_predsize))))
-  print(paste("RMSE for species average model extrapolated from observed 5th size",
-    sqrt(sum(size_data_predsize$sq_error_5_obs_sp_model_S_5_obs)/nrow(size_data_predsize))))
-  print(paste("RMSE for species average model extrapolated from observed 1st size",
-    sqrt(sum(size_data_predsize$sq_error_5_obs_sp_model_S_0_obs)/nrow(size_data_predsize))))
-
-hist(sqrt(size_data_predsize$sq_error_5_obs_sp_model), 
-     main=paste( "From estimated 5th size, RMSE:", 
-     sqrt(sum(size_data_predsize$sq_error_5_obs_sp_model)/nrow(size_data_predsize))), 
-     xlim = c(0, 4))
-hist(sqrt(size_data_predsize$sq_error_5_obs_sp_model_S_5_obs), 
-     main = "From obs 5th size, RMSE:", 
-     sqrt(sum(size_data_predsize$S_hat_final_size_species_model_from_S_5_obs)/nrow(size_data_predsize)), 
-     xlim = c(0, 4))  
-
-
+    rmse <- sqrt(sum(temp_size$S_final_error^2)/nrow(temp_size))
+    
+    hist(temp_size$S_final_error, 
+         main = paste0(fit_title[i], " RMSE: ", signif(rmse, digits = 3)),
+         xlab = "Error obs - est (cm)",
+         xlim = c(min(starting_size$S_final_error), max(starting_size$S_final_error)),
+         breaks = 16)
+    
+    print(paste0("RMSE for ", fit_name[i], " is: ", rmse))
+  }
 }
 
 
