@@ -282,32 +282,77 @@ bayes_ci <-function(vec){
 #-----------------------------------------------------------------------------#
 #                 Predictive power estimation
 #-----------------------------------------------------------------------------#
-S_6_obs <- tibble_6th_obs$S_obs
-census_interval <- tibble_6th_obs$census_interval
-model_spec_name <- "R/ConstSpec.r"
-
-extract_est_tibble <- function(fit, model_spec_name, dataset, S_6_obs, census_interval){
+extract_est_tibble <- function(fit, 
+                               model_name, 
+                               model_spec_name, 
+                               dataset, 
+                               S_6_obs, 
+                               census_interval){
   source(model_spec_name, local=TRUE)
   #Extract samples
   est_data <- rstan::extract(fit, permuted=TRUE)
   #Building data frames
-  measurement_data <- tibble(treeid_factor = dataset$treeid_factor,
-                             census = dataset$census)
-  measurement_data$S_hat <- apply(est_data$S_hat, 2, mean)
-  temp_starting_size <- measurement_data %>%
-    filter(census == 5) %>%
-    mutate(S_5 = S_hat) %>%
-    select(treeid_factor, S_5)
+  measurement_data <- tibble(
+    model_name = model_name,
+    model_spec_name = model_spec_name,
+    treeid_factor = dataset$treeid_factor,
+    census = dataset$census)
+  
+  temp_par_list <- list()
+  
+  if(grepl("hierarchical", model_name, fixed=TRUE) == 1){ #Pick out the estimated fifth size
+    measurement_data$S_hat <- apply(est_data$S_hat, 2, mean)
+    temp_starting_size <- measurement_data %>%
+      filter(census == 5) %>%
+      mutate(S_5 = S_hat) %>%
+      select(model_name, model_spec_name, treeid_factor, S_5)
+    
+    individual_data <- tibble(treeid_factor = 1:400)
+    for(j in growth_pars){
+      individual_data[[j]] <- apply(est_data[[j]], 2, mean)
+    }
+    
+    temp_par_list <- list()
+    for(j in 1:nrow(individual_data)){
+      pars <- list()
+      for(k in growth_pars){
+        pars[[k]] <- individual_data[[k]][j]
+      }
+      temp_par_list[[j]] <- list(
+        model_name = model_name,
+        model_spec_name = model_spec_name,
+        pars = pars
+      )
+    }
+    
+  } else { #Use the observed 5th size and the species-level average parameters
+    measurement_data$S_hat <-dataset$S_obs
+    temp_starting_size <- measurement_data %>%
+      filter(census == 5) %>%
+      mutate(S_5 = S_hat) %>%
+      select(model_name, model_spec_name, treeid_factor, S_5)
+    
+    temp_par_list <- list()
+    for(j in 1:nrow(temp_starting_size)){
+      pars <- list()
+      for(k in species_level_avg_growth_pars){
+        pars[[k]] <- mean(est_data[[k]])
+      }
+      temp_par_list[[j]] <- list(
+        model_name = model_name,
+        model_spec_name = model_spec_name,
+        pars = pars
+      )
+    }
+  }
+  
   temp_starting_size$S_6_obs <- S_6_obs
   temp_starting_size$census_interval <- census_interval
   
-  temp_par_list <- list()
-  par_list_vec <- c()
-  for(j in 1:nrow(temp_starting_size)){
-    temp_list <- list()
-    for(k in ind_pars){
-      temp_list[[ind_pars_names[which(ind_pars == k)]]] <- apply(est_data[[k]], 2, mean)
-    }
-    par_list_vec[j] <- temp_list
-  }
+  return_data <- list(
+    starting_size = temp_starting_size,
+    par_list = temp_par_list
+  )
+  
+  return(return_data)
 }

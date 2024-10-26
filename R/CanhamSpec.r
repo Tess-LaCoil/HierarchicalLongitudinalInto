@@ -98,6 +98,11 @@ size_name <- "canham_S_hat"
 growth_name <- "canham_G_hat"
 cond <- "Canham Pred"
 
+#Species-level model info
+species_level_avg_growth_pars <- c("species_max_growth",
+                                   "species_diameter_at_max_growth",
+                                   "species_K")
+
 #Lists for plot functions
 scatterplot_list <- list(
   size_plot = list(
