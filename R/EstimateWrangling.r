@@ -313,54 +313,32 @@ extract_est_tibble <- function(fit,
       mutate(S_5 = S_hat) %>%
       select(model_name, model_spec_name, treeid_factor, S_5)
     
-  } else if(grepl("hierarchical", model_name, fixed=TRUE) == 1){ #Pick out the estimated fifth size
+  } else { #Pick out the estimated fifth size
     measurement_data$S_hat <- apply(est_data$S_hat, 2, mean)
     temp_starting_size <- measurement_data %>%
       filter(census == 5) %>%
       mutate(S_5 = S_hat) %>%
       select(model_name, model_spec_name, treeid_factor, S_5)
     
-  } else { #Use the observed 5th size
-    measurement_data$S_hat <-dataset$S_obs
-    temp_starting_size <- measurement_data %>%
-      filter(census == 5) %>%
-      mutate(S_5 = S_hat) %>%
-      select(model_name, model_spec_name, treeid_factor, S_5)
   }
   
   #Get individual parameter values
-  if(grepl("hierarchical", model_name, fixed=TRUE) == 1){
-    individual_data <- tibble(treeid_factor = 1:400)
-    for(j in growth_pars){
-      individual_data[[j]] <- apply(est_data[[j]], 2, mean)
+  individual_data <- tibble(treeid_factor = 1:400)
+  for(j in growth_pars){
+    individual_data[[j]] <- apply(est_data[[j]], 2, mean)
+  }
+  
+  temp_par_list <- list()
+  for(j in 1:nrow(individual_data)){
+    pars <- list()
+    for(k in growth_pars){
+      pars[[k]] <- individual_data[[k]][j]
     }
-    
-    temp_par_list <- list()
-    for(j in 1:nrow(individual_data)){
-      pars <- list()
-      for(k in growth_pars){
-        pars[[k]] <- individual_data[[k]][j]
-      }
-      temp_par_list[[j]] <- list(
-        model_name = model_name,
-        model_spec_name = model_spec_name,
-        pars = pars
-      )
-    }
-    
-  } else { #Species-level averages
-    temp_par_list <- list()
-    for(j in 1:nrow(temp_starting_size)){
-      pars <- list()
-      for(k in species_level_avg_growth_pars){
-        pars[[k]] <- mean(est_data[[k]])
-      }
-      temp_par_list[[j]] <- list(
-        model_name = model_name,
-        model_spec_name = model_spec_name,
-        pars = pars
-      )
-    }
+    temp_par_list[[j]] <- list(
+      model_name = model_name,
+      model_spec_name = model_spec_name,
+      pars = pars
+    )
   }
   
   temp_starting_size$S_6_obs <- S_6_obs

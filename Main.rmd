@@ -482,6 +482,32 @@ if(extract_analyse){
   n_ind <- 400 #Number of plots to do
   plot_obs_and_est_life_history(measurement_data, n_ind, "Canham")
   
+  #Scatter plot of individual R^2 values against total estimated growth
+  r_sq_summary <- measurement_data %>%
+    group_by(treeid_factor) %>%
+    summarise(
+      total_est_growth = max(S_hat) - min(S_hat),
+      r_sq = cor(S_hat, S_obs)^2
+    )
+  file_name <- "output/figures/RSq_Growth_Scatter.png"
+  r_sq_scatter <- ggplot(data = r_sq_summary, aes(x=total_est_growth, y=r_sq))+
+    geom_point(colour = "green4", alpha=0.5) +
+    labs(x = "Total est. growth (cm)",
+         y = "R-sq: obs. and est. sizes")+
+    theme_classic() +
+    theme(axis.text=element_text(size=12),
+          axis.title=element_text(size=14,face="bold"))
+  ggsave(file_name, plot=r_sq_scatter, width=100, height=100, units="mm")
+  
+  #Number of individuals with R^2 < 0.75
+  sum(r_sq_summary$r_sq <0.75)
+  
+  #Maximum growth for individuals with R^2 < 0.75
+  max(r_sq_summary$total_est_growth[which(r_sq_summary$r_sq <0.75)])
+  
+  #Total sample R^2
+  cor(measurement_data$S_obs, measurement_data$S_hat)^2
+  
   #Plots of sizes over time, and growth over size, for all individuals
   plot_est_life_history(measurement_data, model_name="Canham")
   
@@ -643,9 +669,9 @@ plot <- plot +
                 aes(col = species_growth_pars$fit_model[1],
                     linetype = species_growth_pars$fit_model[1]),
                 xlim=c(0.5, max(individual_data$S_final))) +
-  scale_color_manual(values = c("green4", "#005500", "black"),
+  scale_color_manual(values = c("green4", "black"),
                      name = "Parameter source") +
-  scale_linetype_manual(values = c("solid", "dashed", "solid"),
+  scale_linetype_manual(values = c("solid", "dashed"),
                         name = "Parameter source") +
   theme(legend.position = "inside",
         legend.position.inside = c(0.7,0.8),
@@ -660,7 +686,9 @@ plot
 
 As part of the method analysis we want to check what the out-of-sample predictive power is like, compared to the ability to predict sizes within the sample. To examine this we look at the ability of models fit to the first 5 observations with regards to their capacity to extrapolate to a 6th size that we can compare to the observed 6th size. 
 
-We are going to build 3 more models: the hierarachical model with Canham growth function fit to 5 observations per individual, the species-average model with Canham growth function, and a hierarchical model with constant growth function and individual level average growth parameters. For the first and third we will estimate the 6th size from the estimated 5th size, while for the second we will estimate the 6th size from the observed 5th size as it does not directly estimate sizes over time at the individual level.
+We are going to build 2 more models: the hierarachical model with Canham growth function fit to 5 observations per individual, and a hierarchical model with constant growth function and individual level average growth parameters fit to 5 observations. The constant growth model is directly analogous to a linear mixed effects model for sizes over time with individual effect term. 
+
+The hierarchical models fit to 5 observations will estimate the 6th size based off of the estimated 5th size and forward projection of the growth curve with the individual growth parameters and the census interval between the 5th and 6th observations. The hierarchical model fit to 6 observations directly estimates the 6th size.
 ```{r}
 fit_5_obs <- TRUE
 
@@ -684,36 +712,6 @@ if(fit_5_obs){
                            est_method = "samp",
                            rstan_data = dataset)
   saveRDS(fit, file="output/data/Single_Species_Fit_Canham_GRecondita_5obs.rds")
-  rm(fit)
-  
-  #Run species-level model on 5 observations
-  #Construct dataset first
-  dataset <- readRDS("data/gar2in_5_rstan_data.rds")
-  temp_obs <- tibble(
-    S_obs = dataset$S_obs,
-    treeid_factor = dataset$treeid_factor,
-    census = dataset$census,
-    census_interval = dataset$census_interval
-    ) %>%
-    group_by(treeid_factor) %>%
-    mutate(delta_S_obs = lead(S_obs) - S_obs) %>%
-    ungroup() %>%
-    select(S_obs, delta_S_obs, census_interval) %>%
-    drop_na()
-        
-  dataset_diffs <-
-    list(
-      N_obs = nrow(temp_obs),
-      S_obs = temp_obs$S_obs,
-      delta_obs = temp_obs$delta_S_obs,
-      census_interval = temp_obs$census_interval
-    )
-  fit <- build_rstan_model(stan_controls,
-                           model_name = "Canham",
-                           stan_file_name = "stan/Canham_SpeciesLevel.stan",
-                           est_method = "samp",
-                           rstan_data = dataset_diffs)
-  saveRDS(fit, file="output/data/GRecondita_SpeciesLevelFit_5obs.rds")
   rm(fit)
   
   #Fit constant growth model to 5 observations
@@ -744,28 +742,24 @@ if(extract_predictive_RMSE){
     filter(census == 6)
   
   fit_save_paths <- c(
-    "output/data/GRecondita_SpeciesLevelFit_5obs.rds",
     "output/data/Single_Species_Fit_Canham_GRecondita_5obs.rds",
     "output/data/Single_Species_Fit_Const_GRecondita_5obs.rds",
     "output/data/Single_Species_Fit_Canham_GRecondita.rds"
   )
   
   fit_name <- c(
-    "species_avg_5_obs",
     "hierarchical_canham_5_obs",
     "hierarchical_const_5_obs",
     "hierarchical_canham_6_obs"
   )
   
   fit_title <- c(
-    "Species average Canham model fit to 5 obs.",
     "Hierarchical Canham fit to 5 obs.",
     "Hierarchical constant fit to 5 obs.",
     "Hierarchical Canham fit to 6 obs."
   )
   
   model_spec_name_vec <- c(
-    "R/CanhamSpec.r",
     "R/CanhamSpec.r",
     "R/ConstSpec.r",
     "R/CanhamSpec.r"
@@ -814,8 +808,8 @@ if(extract_predictive_RMSE){
   
   #Calculate error
   starting_size$S_final_error <- starting_size$S_6_obs - starting_size$S_final_hat
-  par(mfrow = c(4,1))
-
+  par(mfrow = c(3,1))
+  #Histogram of errors
   for(i in 1:length(fit_name)){
     temp_size <- starting_size %>%
       filter(model_name == fit_name[i])
@@ -826,13 +820,11 @@ if(extract_predictive_RMSE){
          main = paste0(fit_title[i], " RMSE: ", signif(rmse, digits = 3)),
          xlab = "Error obs - est (cm)",
          xlim = c(min(starting_size$S_final_error), max(starting_size$S_final_error)),
-         breaks = 16)
+         col = "lightblue")
     
     print(paste0("RMSE for ", fit_name[i], " is: ", rmse))
   }
 }
-
-
 ```
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

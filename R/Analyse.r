@@ -236,19 +236,21 @@ plot_obs_and_est_life_history <-function(plotting_data, n_ind, model_name){
                                     time=sample$time, 
                                     cond=rep(model_name, times=length(sample$time))))
     
+    r_sq <- signif(cor(sample$S_obs, sample$S_hat)^2, digits = 4)
+    
     #Produce plot
     file_name <- paste("output/figures/sampled/", model_name,
                        "_Actual_And_Est_Sample_dot_", 
                        j,".png", sep="")
     
-    plot <- ggplot_obs_and_est_life_history(data, title = "")
+    plot <- ggplot_obs_and_est_life_history(data, r_sq)
     
-    ggsave(file_name, plot=plot, width=130, height=100, units="mm")
+    ggsave(file_name, plot=plot, width=100, height=100, units="mm")
   }
 }
 
 #Produces plot for plot_obs_and_est_life_history()
-ggplot_obs_and_est_life_history<- function(data, title){
+ggplot_obs_and_est_life_history<- function(data, r_sq = ""){
   plot <- ggplot(data=data, aes(x, y)) +
     geom_line(aes(x=(time+1990), y=size, color=as.factor(cond),
                   group=cond, linetype=as.factor(cond)), linewidth=1.1) +
@@ -259,11 +261,16 @@ ggplot_obs_and_est_life_history<- function(data, title){
     scale_color_manual(values = c("green4", "black")) +
     xlab("Years") +
     ylab("Size (cm)") +
-    ggtitle(title) +
     labs(color = NULL, shape=NULL, linetype=NULL) +
+    annotate(geom="text", 
+             x = 1995, 
+             y=(max(data$size) - 0.05*(max(data$size) - min(data$size))), 
+             label=paste0("R-squared:", "\n", r_sq),
+             color="black") +
     theme_classic() +
     theme(axis.text=element_text(size=12),
-          axis.title=element_text(size=14,face="bold"))
+          axis.title=element_text(size=14,face="bold")) +
+    theme(legend.position="none")
   
   return(plot)
 }
