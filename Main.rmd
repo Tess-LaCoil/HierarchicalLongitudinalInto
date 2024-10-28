@@ -686,7 +686,7 @@ plot
 
 As part of the method analysis we want to check what the out-of-sample predictive power is like, compared to the ability to predict sizes within the sample. To examine this we look at the ability of models fit to the first 5 observations with regards to their capacity to extrapolate to a 6th size that we can compare to the observed 6th size. 
 
-We are going to build 2 more models: the hierarachical model with Canham growth function fit to 5 observations per individual, and a hierarchical model with constant growth function and individual level average growth parameters fit to 5 observations. The constant growth model is directly analogous to a linear mixed effects model for sizes over time with individual effect term. 
+We are going to build 2 more models: a hierarchical model with Canham growth function fit to 5 observations per individual, and a hierarchical model with constant growth function and individual level average growth parameters fit to 5 observations. The constant growth model is directly analogous to a linear mixed effects model for sizes over time with individual effect term. 
 
 The hierarchical models fit to 5 observations will estimate the 6th size based off of the estimated 5th size and forward projection of the growth curve with the individual growth parameters and the census interval between the 5th and 6th observations. The hierarchical model fit to 6 observations directly estimates the 6th size.
 ```{r}
@@ -807,7 +807,7 @@ if(extract_predictive_RMSE){
   }
   
   #Calculate error
-  starting_size$S_final_error <- starting_size$S_6_obs - starting_size$S_final_hat
+  starting_size$S_final_error <- starting_size$S_final_hat - starting_size$S_6_obs
   par(mfrow = c(3,1))
   #Histogram of errors
   for(i in 1:length(fit_name)){
@@ -818,12 +818,14 @@ if(extract_predictive_RMSE){
     
     hist(temp_size$S_final_error, 
          main = paste0(fit_title[i], " RMSE: ", signif(rmse, digits = 3)),
-         xlab = "Error obs - est (cm)",
+         xlab = "Error est - obs (cm)",
          xlim = c(min(starting_size$S_final_error), max(starting_size$S_final_error)),
          col = "lightblue")
     
     print(paste0("RMSE for ", fit_name[i], " is: ", rmse))
   }
+  
+  par(mfrow = c(1,1))
 }
 ```
 
