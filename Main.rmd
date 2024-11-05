@@ -328,31 +328,28 @@ if(run_model_BCI_example){
 
   dataset <- readRDS("data/gar2in_rstan_data.rds")
   
-  fit <- list()
-  
-  fit[[3]] <- build_rstan_model(stan_controls = single_species_controls$stan_controls, 
+  fit <- build_rstan_model(stan_controls = single_species_controls$stan_controls, 
                                 model_name = single_species_controls$model_name,
                                 stan_file_name = single_species_controls$stan_file_path,
                                 est_method = "samp",
                                 dataset) #Index 3 used to fit into the existing functions
   
-  filename <- paste(single_species_controls$fit_save_path, "GRecondita_5obs", sep="_")
+  filename <- paste(single_species_controls$fit_save_path, "GRecondita", sep="_")
   filename <- paste(filename, ".rds", sep="")
   saveRDS(fit, file=filename) #Output to file
   
   #Wrangle file names for diagnostic plots
   diag_list <- single_species_controls$diagnostic_list
   for(j in 1:length(diag_list)){
-    diag_list[[j]]$name <- paste(diag_list[[j]]$name, "GRecondita_5obs", sep="_")
+    diag_list[[j]]$name <- paste(diag_list[[j]]$name, "GRecondita", sep="_")
   }
   #Plot diagnostics
-  plot_all_diagnostics(fit[[3]], int_method = 3, 
+  plot_all_diagnostics(fit, int_method = 3, 
                        diag_list,
                        inc_warmup = FALSE,
-                       RHat_name = "GRecon_5obs")
+                       RHat_name = "GRecon")
   
-  fit <- fit[[3]] #get rid of other elements in list
-  saveRDS(fit, file="output/data/Single_Species_Fit_Canham_GRecondita_5obs.rds")
+  saveRDS(fit, file="output/data/Single_Species_Fit_Canham_GRecondita.rds")
   
   #Further diagnostics
   #Initialise data frame for Rhat diagnostics.
@@ -501,6 +498,7 @@ if(extract_analyse){
   
   #Number of individuals with R^2 < 0.75
   sum(r_sq_summary$r_sq <0.75)
+  sum(r_sq_summary$r_sq <0.25)
   
   #Maximum growth for individuals with R^2 < 0.75
   max(r_sq_summary$total_est_growth[which(r_sq_summary$r_sq <0.75)])
@@ -705,6 +703,7 @@ if(fit_5_obs){
   
   #Fit Canham hierarchical model to 5 observations
   #This fit takes a while, expect 50+ hours.
+  source("R/CanhamSpec.r")
   dataset <- readRDS("data/gar2in_5_rstan_data.rds")
   fit <- build_rstan_model(stan_controls,
                            model_name = "Canham",
@@ -712,16 +711,37 @@ if(fit_5_obs){
                            est_method = "samp",
                            rstan_data = dataset)
   saveRDS(fit, file="output/data/Single_Species_Fit_Canham_GRecondita_5obs.rds")
+  #Wrangle file names for diagnostic plots
+  diag_list <- single_species_controls$diagnostic_list
+  for(j in 1:length(diag_list)){
+    diag_list[[j]]$name <- paste(diag_list[[j]]$name, "GRecondita_5obs", sep="_")
+  }
+  #Plot diagnostics
+  plot_all_diagnostics(fit, int_method = 3, 
+                       diag_list,
+                       inc_warmup = FALSE,
+                       RHat_name = "GRecon_Canham_5obs")
   rm(fit)
   
   #Fit constant growth model to 5 observations
   dataset <- readRDS("data/gar2in_5_rstan_data.rds")
+  source("R/ConstSpec.r")
   fit <- build_rstan_model(stan_controls,
                            model_name = "Constant",
                            stan_file_name = "stan/ConstGrowth_SingleSpecies.stan",
                            est_method = "samp",
                            rstan_data = dataset)
   saveRDS(fit, file="output/data/Single_Species_Fit_Const_GRecondita_5obs.rds")
+  #Wrangle file names for diagnostic plots
+  diag_list <- single_species_controls$diagnostic_list
+  for(j in 1:length(diag_list)){
+    diag_list[[j]]$name <- paste(diag_list[[j]]$name, "GRecondita_5obs", sep="_")
+  }
+  #Plot diagnostics
+  plot_all_diagnostics(fit, int_method = 3, 
+                       diag_list,
+                       inc_warmup = FALSE,
+                       RHat_name = "GRecon_Const_5obs")
   rm(fit)
 }
 ```
