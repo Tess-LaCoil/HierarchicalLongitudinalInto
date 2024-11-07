@@ -4,6 +4,13 @@ build_all_models <- function(model_build_controls){
     #Load in model specs
     source(model_build_controls$model_list[[i]]$model_spec, local=TRUE)
     
+    #Get step size for Canham fits
+    if(grepl("Canham", model_build_controls$model_list[[i]]$model_name)){
+      step_size <- model_build_controls$model_list[[i]]$step_size
+    } else {
+      step_size = NA
+    }
+    
     #Build models at each level required
       if(model_build_controls$level_of_models$single_species){ #Single species model
       temp_filename <- model_build_controls$rstan_data_locations$single_species_data
@@ -16,7 +23,8 @@ build_all_models <- function(model_build_controls){
                 model_build_controls$plot_diagnostics, 
                 model_build_controls$est_method,
                 model_build_controls$int_method,
-                model_build_controls$inc_warmup)
+                model_build_controls$inc_warmup,
+                step_size)
     }
     
     if(model_build_controls$level_of_models$single_individual){ #Single individual model
@@ -30,7 +38,8 @@ build_all_models <- function(model_build_controls){
                 model_build_controls$plot_diagnostics, 
                 model_build_controls$est_method,
                 model_build_controls$int_method,
-                model_build_controls$inc_warmup)
+                model_build_controls$inc_warmup,
+                step_size)
     }
   }
 }
@@ -40,12 +49,21 @@ build_all_models <- function(model_build_controls){
 #                        Generic model functions
 #-----------------------------------------------------------------------#
 build_fit <- function(model_controls, plot_diagnostics, 
-                      est_method, int_method, inc_warmup){
+                      est_method, int_method, inc_warmup,
+                      step_size){
   if(file.exists(model_controls$rstan_data_loc)){ #Check that the data file exists
     rstan_data <- readRDS(model_controls$rstan_data_loc)$rstan_data
   } else {
     print(paste("Data file not found:", model_controls$rstan_data_loc, ". Please build data."))
     return(NA)
+  }
+  
+  if(!is.na(step_size)){ #If a step size is provided
+    for(i in int_method){
+      rstan_data[[i]] <- c(int_method = rstan_data[[i]]$int_method,
+                           step_size = step_size,
+                           rstan_data[[i]][2:length(rstan_data[[i]])])
+    }
   }
   
   fit <- list()

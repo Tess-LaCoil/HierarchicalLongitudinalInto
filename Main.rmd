@@ -349,8 +349,6 @@ if(run_model_BCI_example){
                        inc_warmup = FALSE,
                        RHat_name = "GRecon")
   
-  saveRDS(fit, file="output/data/Single_Species_Fit_Canham_GRecondita.rds")
-  
   #Further diagnostics
   #Initialise data frame for Rhat diagnostics.
   Rhat_data <- data.frame(row.names=names(fit@sim[["samples"]][[1]]))
@@ -366,6 +364,7 @@ if(run_model_BCI_example){
   hist(histvec, col="lightblue", main="Histogram of Rhats for all chains", xlab="Rhat")
   length(which(histvec > 1.05))
   
+  saveRDS(fit, file="output/data/Single_Species_Fit_Canham_GRecondita.rds")
   rm(fit)
 }
 ```
@@ -556,7 +555,7 @@ if(extract_analyse){
 }
 ```
 
-In comparison to Herault (2011) we fit a second G. recondita model. This one uses pairwise differences as point estimates of growth independent of the repeat measurement structure.
+For a direct comparison to Herault (2011) we fit a second G. recondita model. This one uses pairwise differences as point estimates of growth independent of the repeat measurement structure.
 ```{r}
 #Build dataset from pairwise differences
 source("R/RunModels.r")
@@ -872,23 +871,25 @@ model_list <- list(
   canham_model = list( #This model requires a step size argument in the data passed to it.
     model_spec = "R/CanhamSpec.r",
     model_name = "Canham",
-    model_file = "Canham"
+    model_file = "Canham",
+    step_size = 1
   ))#,
   
 storage_list <- list(
   canham_model = list(
     model_spec = "R/CanhamSpec.r",
     model_name = "Canham",
-    model_file = "Canham"
+    model_file = "Canham",
+    step_size = 1
   ),
   
-  const_model = list(
+  const_model = list( #All numerical methods are equivalent for constant growth
     model_spec = "R/ConstSpec.r",
     model_name = "Constant",
     model_file = "Const"
   ),
   
-  exp_model = list(
+  exp_model = list( #The exponential model uses the census interval as the integration step size for numerical methods
     model_spec = "R/ExponentialSpec.r",
     model_name = "Exponential",
     model_file = "Exp"
