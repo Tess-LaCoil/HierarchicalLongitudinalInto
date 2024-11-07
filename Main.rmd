@@ -45,24 +45,32 @@ rstan_data_locations <- list(
   single_individual_data = "output/data/SingleInd_RStan"
 )
 
-data_build_models <- list(
+data_build_models <- list( #Swap out as required
+  exp_model = list(
+    model_spec = "R/ExponentialSpec.r",
+    model_name = "Exponential",
+    model_file = "Exp"
+  )
+)
+
+data_build_storage_list <- list(
   canham_model = list(
     model_spec = "R/CanhamSpec.r",
     model_name = "Canham",
     model_file = "Canham"
-  )#,
+  ),
   
-#  const_model = list(
-#    model_spec = "R/ConstSpec.r",
-#    model_name = "Constant",
-#    model_file = "Const"
-#  ),
+  const_model = list(
+    model_spec = "R/ConstSpec.r",
+    model_name = "Constant",
+    model_file = "Const"
+  ),
   
-#  exp_model = list(
-#    model_spec = "R/ExponentialSpec.r",
-#    model_name = "Exponential",
-#    model_file = "Exp"
-#  )
+  exp_model = list(
+    model_spec = "R/ExponentialSpec.r",
+    model_name = "Exponential",
+    model_file = "Exp"
+  )
 )
   
 sim_pars <- list(N_ind = 20, #Parameters controlling simulation
@@ -71,7 +79,7 @@ sim_pars <- list(N_ind = 20, #Parameters controlling simulation
                  step_size = 0.1,
                  N_obs = 5, #Observations per individual
                  census_interval = 5, 
-                 model = "canham")
+                 model = "exp")
 
 sim_pars$time <- seq(from=0, to=(sim_pars$N_obs*sim_pars$census_interval -1), 
                      by=sim_pars$census_interval)
@@ -868,15 +876,14 @@ rstan_data_locations <- list(
 )
 
 model_list <- list(
-  canham_model = list( #This model requires a step size argument in the data passed to it.
-    model_spec = "R/CanhamSpec.r",
-    model_name = "Canham",
-    model_file = "Canham",
-    step_size = 1
+  exp_model = list( #The exponential model uses the census interval as the integration step size for numerical methods
+    model_spec = "R/ExponentialSpec.r",
+    model_name = "Exponential",
+    model_file = "Exp"
   ))#,
   
 storage_list <- list(
-  canham_model = list(
+  canham_model = list(#This model requires a step size argument in the data passed to it.
     model_spec = "R/CanhamSpec.r",
     model_name = "Canham",
     model_file = "Canham",
